@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "python_adv_proj"
+version = "0.1.0"
+description = ""
+authors = ["Best_Team"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+pytest-cov = "^5.0"
+ruff = "^0.7.0"
+mypy = "^1.13"
+black = { version = "^24.0", optional = true }
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+# Настройки ruff
+[tool.ruff]
+select = ["E", "F", "W", "I", "N", "B", "A", "C4", "UP", "PYI", "PT", "Q", "RET", "SIM", "TID", "ARG", "ERA", "PL", "RUF"]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

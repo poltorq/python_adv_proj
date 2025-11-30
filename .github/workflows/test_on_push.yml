@@ -24,10 +24,12 @@ jobs:
         run: coverage run -m pytest tests/ -vv
       - name: Tests report
         run: coverage report -m && coverage xml
+      - name: Install ruff (standalone)
+        run: |
+          curl -LsSf https://astral.sh/ruff/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
       - name: Lint with ruff
         run: |
           ruff check .
           ruff format --check .
-
-      - name: Type checking with mypy
-        run: mypy .

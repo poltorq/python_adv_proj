@@ -22,6 +22,7 @@ jobs:
         # Устанавливаем зависимости
         run: pip install -r requirements.txt
       - name: Run tests
-        run: coverage run test/tests.py
+        run: poetry run coverage run pytest tests/
       - name: Tests report
-        run: coverage report
+        run: poetry run coverage report -m
+          poetry run coverage xml

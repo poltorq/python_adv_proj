@@ -25,5 +25,6 @@ jobs:
       - name: Run tests
         run: coverage run -m pytest tests/ -vv
       - name: Tests report
-        run: coverage report -m
-          run coverage xml
+        run: 
+          coverage report -m
+          coverage xml

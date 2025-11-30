@@ -23,7 +23,7 @@ jobs:
         run:
           pip install -r requirements.txt coverage pytest
       - name: Run tests
-        run: poetry run coverage run pytest tests/
+        run: coverage run pytest tests/
       - name: Tests report
-        run: poetry run coverage report -m
-          poetry run coverage xml
+        run: coverage report -m
+          run coverage xml

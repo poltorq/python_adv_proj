@@ -23,7 +23,7 @@ jobs:
         run:
           pip install -r requirements.txt coverage pytest
       - name: Run tests
-        run: coverage run -m pytest tests/test.py -v
+        run: coverage run -m pytest tests/test_brainless.py -v
       - name: Tests report
         run: coverage report -m
           run coverage xml

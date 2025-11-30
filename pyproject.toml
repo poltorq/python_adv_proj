@@ -1,8 +1,8 @@
 [tool.ruff]
-select = [
+lint.select = [
   "E", "W", "F", "I", "N", "B", "A", "C4", "PIE", "T20", "Q", "RET", "SIM", "ARG", "ERA", "PL", "RUF"
 ]
-ignore = []
+lint.ignore = []
 
 line-length = 88
 

@@ -11,7 +11,7 @@ def test_basic_math():
 def test_string():
     name = "GitHub Actions"
     assert "Actions" in name
-    assert len(name) == 15
+    assert len(name) == 14
 
 
 # Бонус: проверим, что Python версия правильная (полезно в матрице)

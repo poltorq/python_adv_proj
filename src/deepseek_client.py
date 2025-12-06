@@ -1,7 +1,7 @@
-import os
 from typing import Optional
-from openai import OpenAI
+import os
 
+from openai import OpenAI
 
 class DeepSeekClient:
     """

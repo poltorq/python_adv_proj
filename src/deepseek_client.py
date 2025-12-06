@@ -1,7 +1,8 @@
-from typing import Optional
 import os
+from typing import Optional
 
 from openai import OpenAI
+
 
 class DeepSeekClient:
     """

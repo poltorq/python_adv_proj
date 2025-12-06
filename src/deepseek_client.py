@@ -1,13 +1,13 @@
 import os
-from typing import Any, Optional
+from typing import Optional
 from openai import OpenAI
 
+
 class DeepSeekClient:
-
     """
-    Клиент DeepSeek API, использует OpenAI
+    DeepSeek API client using OpenAI SDK.
 
-    Работает по образу и подобию официальной документации:
+    Code works according to the official documentation:
     https://api-docs.deepseek.com
     """
 
@@ -20,14 +20,15 @@ class DeepSeekClient:
             max_retries: int = 3,
     ) -> None:
         """
-        Тут происходит инициализация клиента DeepSeek API.
+         Initializes the DeepSeek API client.
 
         Args:
-          api_key: API ключ DeepSeek. Если не указан, происходит попытка взять его из DEEPSEEK_API_KEY.
-          base_url: Базовый URL API. По умолчанию https://api.deepseek.com.
-          model: Модель для использования. По умолчанию deepseek-chat.
-          timeout: Таймаут запроса в секундах.
-          max_retries: Максимальное количество повторных попыток при ошибках.
+            api_key: DeepSeek API key. If not provided, attempts to take it
+                from the DEEPSEEK_API_KEY environment variable.
+            base_url: Base URL of the API. Default is https://api.deepseek.com.
+            model: Model to use. Default is deepseek-chat.
+            timeout: Request timeout in seconds.
+            max_retries: Maximum number of retry attempts for errors.
         """
         self.api_key = api_key or os.environ.get("DEEPSEEK_API_KEY")
         if not self.api_key:
@@ -42,11 +43,10 @@ class DeepSeekClient:
         self.model = model
         self.validate_connection()
 
-
     def validate_connection(self) -> None:
         """
-        Валидирует работу DeepSeek API.
-        Если что-то не так — выкидывает Exception.
+        Validates the DeepSeek API connection.
+        Raises an exception if something is wrong.
         """
         try:
             self.client.chat.completions.create(
@@ -55,6 +55,6 @@ class DeepSeekClient:
                 max_tokens=1,
             )
         except Exception as e:
-            raise RuntimeError(f"DeepSeek_api_key is not available: {e}")
-
-
+            raise RuntimeError(
+                f"DeepSeek_api_key is not available: {e}"
+            ) from e

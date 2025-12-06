@@ -1,10 +1,10 @@
-import pytest
 import os
+from unittest.mock import Mock, patch
+
+import pytest
 
 from src import deepseek_client
 from src.deepseek_client import DeepSeekClient
-
-from unittest.mock import Mock, patch
 
 
 @patch("src.deepseek_client.OpenAI")

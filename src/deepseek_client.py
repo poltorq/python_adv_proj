@@ -13,12 +13,12 @@ class DeepSeekClient:
     """
 
     def __init__(
-            self,
-            api_key: Optional[str] = None,
-            base_url: str = "https://api.deepseek.com",
-            model: str = "deepseek-chat",
-            timeout: int = 10,
-            max_retries: int = 3,
+        self,
+        api_key: Optional[str] = None,
+        base_url: str = "https://api.deepseek.com",
+        model: str = "deepseek-chat",
+        timeout: int = 10,
+        max_retries: int = 3,
     ) -> None:
         """
          Initializes the DeepSeek API client.
@@ -56,6 +56,4 @@ class DeepSeekClient:
                 max_tokens=1,
             )
         except Exception as e:
-            raise RuntimeError(
-                f"DeepSeek_api_key is not available: {e}"
-            ) from e
+            raise RuntimeError(f"DeepSeek_api_key is not available: {e}") from e

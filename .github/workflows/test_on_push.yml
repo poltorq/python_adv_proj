@@ -1,34 +1,79 @@
-name: Run tests on any Push event
+name: Run tests and deploy on Push event
+
 on:
   push:
-    tags:
-      - '!refs/tags/*'
     branches:
-      - '*'
+      - 'main'
+      - 'develop'
+
 jobs:
   run_tests:
     runs-on: [ubuntu-latest]
     steps:
-      # Чекаутим код
       - uses: actions/checkout@master
-      # Устанавливаем python нужной версии
       - uses: actions/setup-python@v1
         with:
           python-version: '3.12.12'
           architecture: 'x64'
+      - name: Check for skip-tests flag
+        id: check_skip
+        run: |
+          if [[ "${{ github.event.head_commit.message }}" == *"[skip-tests]"* ]]; then
+            echo "skip_tests=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip_tests=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Install requirements
-        run:
-          pip install -r requirements.txt coverage pytest flake8 pre-commit &&
+        if: steps.check_skip.outputs.skip_tests == 'false'
+        run: |
+          pip install -r requirements.txt coverage pytest flake8 pre-commit
           pre-commit install
+
       - name: Run tests
+        if: steps.check_skip.outputs.skip_tests == 'false'
         run: coverage run -m pytest tests/ -vv
+
       - name: Tests report
+        if: steps.check_skip.outputs.skip_tests == 'false'
         run: coverage report -m && coverage xml
-      - name: Install ruff (standalone)
+
+      - name: Install ruff
+        if: steps.check_skip.outputs.skip_tests == 'false'
         run: |
           curl -LsSf https://astral.sh/ruff/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Lint with ruff
-        run: |
-          flake8 .
+        if: steps.check_skip.outputs.skip_tests == 'false'
+        run: flake8 .
+
+  deploy_docker:
+    runs-on: [ubuntu-latest]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Dockerfile.bot
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile.bot
+          push: true
+          tags: |
+            poltorq/event-bot-box:latest
+
+      - name: Build and push Dockerfile.server
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile.server
+          push: true
+          tags: |
+            poltorq/event-server-box:latest

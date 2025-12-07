@@ -1,0 +1,21 @@
+FROM python:3.12-slim
+# Python docker images: https://github.com/docker-library/docs/tree/master/python/
+
+USER root
+
+# Copy the src
+WORKDIR /src
+COPY src/ /src/
+COPY ./requirements.txt /src
+RUN ls -la /src
+
+# Install python dependencies
+RUN python3 --version
+RUN pip3 install --upgrade pip
+RUN pip3 install --no-cache-dir -r /src/requirements.txt
+RUN pip3 list --format=columns
+
+USER 1001
+
+# EXPOSE 5001
+ENTRYPOINT ["python3", "/src/cmd/server/server.py"]

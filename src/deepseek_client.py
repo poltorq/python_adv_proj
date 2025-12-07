@@ -56,4 +56,6 @@ class DeepSeekClient:
                 max_tokens=1,
             )
         except Exception as e:
-            raise RuntimeError(f"DeepSeek_api_key is not available: {e}") from e
+            raise RuntimeError(
+                f"DeepSeek_api_key is not available: {e}"
+            ) from e

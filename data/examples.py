@@ -138,7 +138,8 @@ class People:
     ])
 
     roles_ru: List[str] = field(default_factory=lambda: [
-        "тимлид", "лид", "менеджер", "заказчик", "стажеры", "генеральный", "клиент"
+        "тимлид", "лид", "менеджер", "заказчик", "стажеры",
+        "генеральный", "клиент"
     ])
 
     roles_en: List[str] = field(default_factory=lambda: [
@@ -169,8 +170,10 @@ class Events:
     ])
 
     topics_en: List[str] = field(default_factory=lambda: [
-        "project sync", "budget review", "status update", "launch", "release",
-        "training", "onboarding", "planning", "Q&A", "code review", "design review"
+        "project sync", "budget review", "status update",
+        "launch", "release",
+        "training", "onboarding", "planning", "Q&A", "code review",
+        "design review"
     ])
 
     project_names: List[str] = field(default_factory=lambda: [

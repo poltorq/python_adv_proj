@@ -27,7 +27,9 @@ def test_client_init_without_api_key():
         if "DEEPSEEK_API_KEY" in os.environ:
             del os.environ["DEEPSEEK_API_KEY"]
 
-        with pytest.raises(ValueError, match="Deepseek_api_key is not provided"):
+        with pytest.raises(
+                ValueError, match="Deepseek_api_key is not provided"
+        ):
             DeepSeekClient()
     finally:
         if old_key is not None:
@@ -128,7 +130,9 @@ def test_validate_connection_failure(mock_openai):
 
     client = DeepSeekClient(api_key="test_key")
 
-    with pytest.raises(RuntimeError, match="DeepSeek_api_key is not available"):
+    with pytest.raises(
+            RuntimeError, match="DeepSeek_api_key is not available"
+    ):
         client.validate_connection()
 
 

@@ -77,3 +77,25 @@ jobs:
           push: true
           tags: |
             poltorq/event-server-box:latest
+  block_direct_push_to_main:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [ubuntu-latest]
+    steps:
+      - name: Check if commit is from merge
+        id: check_merge
+        run: |
+          if [[ "${{ github.event.head_commit.message }}" == *"Merge pull request"* ]] || 
+             [[ "${{ github.event.head_commit.message }}" == *"Merge branch"* ]] ||
+             [[ "${{ github.event.head_commit.message }}" == *"github-actions"* ]]; then
+            echo "is_merge=true" >> $GITHUB_OUTPUT
+            echo "✅ Это мерж-коммит или от GitHub Actions"
+          else
+            echo "is_merge=false" >> $GITHUB_OUTPUT
+            echo "⚠️  Обнаружен прямой коммит в main!"
+          fi
+
+      - name: Fail on direct push to main
+        if: steps.check_merge.outputs.is_merge == 'false'
+        run: |
+          echo "❌ ПРЯМОЙ PUSH В MAIN ЗАПРЕЩЕН!"
+          exit 1

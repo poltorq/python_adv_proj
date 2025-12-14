@@ -78,18 +78,6 @@ TEMPLATES: List[MessageTemplate] = [
 
     MessageTemplate(
         ru=(
-            "Сдвинь нашу встречу {event_name} на пораньше — пусть будет "
-            "{time} {date}. Место — {place}."
-        ),
-        en=(
-            "Move our meeting {event_name} earlier — let's make it "
-            "{time} on {date}. Location: {place}."
-        ),
-        slots=["event_name", "time", "date", "place"],
-    ),
-
-    MessageTemplate(
-        ru=(
             "Отмени, пожалуйста, {event_name}, оно было на {date} "
             "в {time}."
         ),
@@ -186,18 +174,6 @@ TEMPLATES: List[MessageTemplate] = [
 
     MessageTemplate(
         ru=(
-            "Напомни мне про {event_name} {date} в {time}, и приложи "
-            "ссылку {link}, чтобы не потерялась."
-        ),
-        en=(
-            "Remind me about {event_name} on {date} at {time}, and attach "
-            "the link {link} so I don't lose it."
-        ),
-        slots=["event_name", "date", "time", "link"],
-    ),
-
-    MessageTemplate(
-        ru=(
             "Создай мне мит {event_name} {date} в {time}, чтобы "
             "созвониться с {people} в {link}."
         ),
@@ -210,18 +186,6 @@ TEMPLATES: List[MessageTemplate] = [
 
     MessageTemplate(
         ru=(
-            "Если можно, сдвинь {event_name} на попозже — на {time} "
-            "{date}, место оставь {place}."
-        ),
-        en=(
-            "Please push back {event_name} to {time} on {date}, keep it "
-            "in {place}."
-        ),
-        slots=["event_name", "time", "date", "place"],
-    ),
-
-    MessageTemplate(
-        ru=(
             "Заблокируй мне время под {event_name} {date} в {time} "
             "в {place} и добавь туда {people}."
         ),
@@ -230,17 +194,5 @@ TEMPLATES: List[MessageTemplate] = [
             "{place} and loop in {people}."
         ),
         slots=["event_name", "date", "time", "place", "people"],
-    ),
-
-    MessageTemplate(
-        ru=(
-            "Напомни пж про {event_name} ровно {date} в {time} "
-            "и позови {people}."
-        ),
-        en=(
-            "Remind pls about {event_name} exactly {date} at {time} "
-            "and call {people}."
-        ),
-        slots=["event_name", "date", "time", "people"],
     ),
 ]

@@ -176,6 +176,13 @@ class Events:
         "design review"
     ])
 
+    topics_ru: List[str] = field(default_factory=lambda: [
+        "синк по проекту", "ревью бюджета", "обновление статуса",
+        "запуск", "релиз",
+        "обучение", "анбординг", "планирование", "вопросы и ответы", "код-ревью",
+        "дизайн-ревью"
+    ])
+
     project_names: List[str] = field(default_factory=lambda: [
         "'Ромашка'", "Project X", "MVP", "SuperApp", "Website Redesign",
         "Q1 Goals", "Alpha", "Phoenix", "Black Friday"

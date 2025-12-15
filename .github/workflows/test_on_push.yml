@@ -99,3 +99,4 @@ jobs:
         run: |
           echo "❌ ПРЯМОЙ PUSH В MAIN ЗАПРЕЩЕН!"
           exit 1
+

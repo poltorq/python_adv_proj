@@ -13,12 +13,12 @@ class DeepSeekClient:
     """
 
     def __init__(
-        self,
-        api_key: Optional[str] = None,
-        base_url: str = "https://api.deepseek.com",
-        model: str = "deepseek-chat",
-        timeout: int = 10,
-        max_retries: int = 3,
+            self,
+            api_key: Optional[str] = None,
+            base_url: str = "https://openrouter.ai/api/v1",
+            model: str = "tngtech/deepseek-r1t-chimera:free",
+            timeout: int = 10,
+            max_retries: int = 3,
     ) -> None:
         """
          Initializes the DeepSeek API client.
@@ -26,7 +26,7 @@ class DeepSeekClient:
         Args:
             api_key: DeepSeek API key. If not provided, attempts to take it
                 from the DEEPSEEK_API_KEY environment variable.
-            base_url: Base URL of the API. Default is https://api.deepseek.com.
+            base_url: Base URL of the API from openrouter.ai
             model: Model to use. Default is deepseek-chat.
             timeout: Request timeout in seconds.
             max_retries: Maximum number of retry attempts for errors.

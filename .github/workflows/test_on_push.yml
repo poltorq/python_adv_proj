@@ -73,6 +73,7 @@ jobs:
           tags: |
             poltorq/event-server-box:latest
   block_direct_push_to_main:
+    if: github.ref == 'refs/heads/main'
     runs-on: [ubuntu-latest]
     steps:
       - name: Check if commit is from merge

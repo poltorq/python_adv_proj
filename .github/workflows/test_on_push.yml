@@ -2,10 +2,6 @@ name: Run tests and deploy on Push event
 
 on:
   push:
-    branches:
-      - 'main'
-      - 'develop'
-
 jobs:
   run_tests:
     runs-on: [ubuntu-latest]

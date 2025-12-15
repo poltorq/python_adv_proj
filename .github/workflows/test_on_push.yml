@@ -98,5 +98,5 @@ jobs:
         if: steps.check_merge.outputs.is_merge == 'false'
         run: |
           echo "❌ ПРЯМОЙ PUSH В MAIN ЗАПРЕЩЕН!"
-          exit 1
-
+          exit 1 
+# qq

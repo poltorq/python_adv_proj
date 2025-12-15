@@ -3,8 +3,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from src import deepseek_client
-from src.deepseek_client import DeepSeekClient
+import deepseek_client
+from deepseek_client import DeepSeekClient
 
 
 @patch("src.deepseek_client.OpenAI")

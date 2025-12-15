@@ -1,0 +1,22 @@
+LEXICON_RU = {
+    # Команды
+    '/start': '👋 Привет, {name}!\n\nЯ эхо-бот на Aiogram 3!\nПросто напиши мне что-нибудь.',
+    '/help': '📋 Доступные команды:\n/start - начать работу\n/help - помощь\n/echo текст - эхо с текстом\n\nИли просто напиши что-нибудь!',
+
+    # Ответы
+    'echo_empty': 'Напиши что-нибудь после /echo',
+    'echo_response': '🔁 Эхо: {text}',
+    'sticker_response': 'Стикер ID: {sticker_id}',
+
+    # Кнопки
+    'btn_hello': '👋 Привет',
+    'btn_date': '📅 Дата',
+    'btn_help': '🆘 Помощь',
+    'btn_random': '🎲 Случайное число',
+
+    # Сообщения
+    'hello_user': 'Привет, {name}! 😊',
+    'current_date': '📆 Сегодня: {date}',
+    'random_number': '🎲 Случайное число: {number}',
+    'echo_message': '📨 Ты написал: {text}\n\n👤 ID: {user_id}\n📝 Длина: {length} символов'
+}

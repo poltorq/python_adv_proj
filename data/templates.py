@@ -49,7 +49,7 @@ TEMPLATES: List[MessageTemplate] = [
     MessageTemplate(
         ru="Важный созвон {date}, напомни про него в {time}.",
         en="Serious zoom {date}, remind about it at {time}.",
-        slots=["date", "time"],
+        slots=["event_name", "date", "time"],
     ),
 
     MessageTemplate(

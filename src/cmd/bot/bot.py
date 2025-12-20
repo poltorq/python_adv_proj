@@ -4,11 +4,12 @@ import sys
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher
 
+from src.services.logger import setup_logger  # type: ignore
+from src.handlers import routers  # type: ignore
+
 # Добавляем путь к src
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
-from src.services.logger import setup_logger
-from src.handlers import routers
 
 # Настройка
 load_dotenv()
@@ -19,10 +20,10 @@ if not TOKEN:
 logger = setup_logger(__name__)
 
 
-async def main():
+async def main() -> None:
     """Основная функция запуска бота"""
     # Создаем объекты
-    bot = Bot(token=TOKEN)
+    bot = Bot(token=TOKEN)  # type: ignore
     dp = Dispatcher()
 
     # Регистрируем роутеры

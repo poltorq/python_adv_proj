@@ -1,5 +1,6 @@
 import os
 from unittest.mock import Mock, patch
+from dotenv import load_dotenv
 
 import pytest
 
@@ -7,7 +8,7 @@ import deepseek_client
 from deepseek_client import DeepSeekClient
 
 
-@patch("src.deepseek_client.OpenAI")
+@patch("deepseek_client.OpenAI")
 def test_client_init_with_api_key(mock_openai):
     """Test client creation with API key"""
     mock_client_instance = Mock()
@@ -16,7 +17,7 @@ def test_client_init_with_api_key(mock_openai):
 
     client = deepseek_client.DeepSeekClient(api_key="test_key")
     assert client.api_key == "test_key"
-    assert client.model == "deepseek-chat"
+    assert client.model == "tngtech/deepseek-r1t-chimera:free"
 
 
 def test_client_init_without_api_key():
@@ -36,7 +37,7 @@ def test_client_init_without_api_key():
             os.environ["DEEPSEEK_API_KEY"] = old_key
 
 
-@patch("src.deepseek_client.OpenAI")
+@patch("deepseek_client.OpenAI")
 def test_init_with_env_variable(mock_openai):
     """Test client creation with key from environment variable"""
     mock_client = Mock()
@@ -49,7 +50,7 @@ def test_init_with_env_variable(mock_openai):
     assert client.api_key == "test_key"
 
 
-@patch("src.deepseek_client.OpenAI")
+@patch("deepseek_client.OpenAI")
 def test_init_parameter_over_environment(mock_openai):
     """Test parameter priority over environment variable"""
     mock_client = Mock()
@@ -62,7 +63,7 @@ def test_init_parameter_over_environment(mock_openai):
     assert client.api_key == "param_key"
 
 
-@patch("src.deepseek_client.OpenAI")
+@patch("deepseek_client.OpenAI")
 def test_custom_parameters(mock_openai):
     """Test custom parameters"""
     mock_client_instance = Mock()
@@ -79,7 +80,7 @@ def test_custom_parameters(mock_openai):
     assert client.model == "test-model"
 
 
-@patch("src.deepseek_client.OpenAI")
+@patch("deepseek_client.OpenAI")
 def test_openai_client_initialization(mock_openai):
     """Test OpenAI client initialization"""
     mock_client = Mock()
@@ -89,13 +90,13 @@ def test_openai_client_initialization(mock_openai):
 
     mock_openai.assert_called_once_with(
         api_key="test_key",
-        base_url="https://api.deepseek.com",
+        base_url="https://openrouter.ai/api/v1",
         timeout=10,
         max_retries=3,
     )
 
 
-@patch("src.deepseek_client.OpenAI")
+@patch("deepseek_client.OpenAI")
 def test_validate_connection_success(mock_openai):
     """Test successful connection validation"""
     mock_client_instance = Mock()
@@ -111,13 +112,13 @@ def test_validate_connection_success(mock_openai):
     client.validate_connection()
 
     mock_client_instance.chat.completions.create.assert_called_once_with(
-        model="deepseek-chat",
+        model="tngtech/deepseek-r1t-chimera:free",
         messages=[{"role": "user", "content": "ping"}],
         max_tokens=1,
     )
 
 
-@patch("src.deepseek_client.OpenAI")
+@patch("deepseek_client.OpenAI")
 def test_validate_connection_failure(mock_openai):
     """Test failed connection validation"""
     mock_client_instance = Mock()
@@ -136,7 +137,7 @@ def test_validate_connection_failure(mock_openai):
         client.validate_connection()
 
 
-@patch("src.deepseek_client.OpenAI")
+@patch("deepseek_client.OpenAI")
 def test_init_calls_validate(mock_openai):
     """Test that __init__ calls validate_connection"""
     mock_client_instance = Mock()
@@ -147,3 +148,40 @@ def test_init_calls_validate(mock_openai):
 
         DeepSeekClient(api_key="test_key")
         mock_validate.assert_called_once()
+
+
+@patch("deepseek_client.OpenAI")
+def test_validate_connection_raises_runtime_error(mock_openai):
+    mock_instance = Mock()
+    mock_openai.return_value = mock_instance
+    mock_instance.chat.completions.create.side_effect = Exception(
+        "Network error"
+    )
+
+    client = DeepSeekClient.__new__(DeepSeekClient)
+    client.client = mock_instance
+    client.model = "tngtech/deepseek-r1t-chimera:free"
+    client.api_key = "fake_key"
+
+    with pytest.raises(
+            RuntimeError,
+            match="DeepSeek_api_key is not available: Network error",
+    ):
+        client.validate_connection()
+
+
+load_dotenv()
+
+
+def test_if_it_actually_works():
+    """No joking: real test if all this
+    code works & produces answers"""
+    client = DeepSeekClient()
+
+    response = client.client.chat.completions.create(
+        model=client.model,
+        messages=[{"role": "user", "content": "Hello, DeepSeek!"}],
+        max_tokens=1,
+    )
+
+    print(response)

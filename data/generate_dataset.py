@@ -5,6 +5,7 @@ from typing import List, Dict, Tuple, Any
 from templates import TEMPLATES, MessageTemplate
 from generators import sample_date, sample_time, sample_people, sample_link, sample_place, sample_event_name
 
+random.seed(42)
 # mapping and slots stuff
 # p s I think we need to deprecate it and make names of slots similar to docs, but it's unnecessary now
 SLOT_TO_TAG = {
@@ -136,13 +137,13 @@ def generate_and_tokenize(template: MessageTemplate, lang: str = "ru") -> Dict[s
     }
 
 
-N = 10000  # num of samples
+N = 10000 # num of samples
 output_file = "dataset.jsonl"
 print("generation started")
 with open(output_file, "w") as f:
     for i in range(N):
         tmpl = random.choice(TEMPLATES)
-        lang = random.choice(["ru", "en"])
+        lang = "ru" # now use only ruBERT
 
         example_data = generate_and_tokenize(tmpl, lang)
         f.write(json.dumps(example_data, ensure_ascii=False) + '\n')

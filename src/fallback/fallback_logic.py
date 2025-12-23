@@ -1,18 +1,6 @@
 from abc import ABC, abstractmethod
-from fallback.fallbacks import (
-    low_quality_output,
-    empty_response,
-    model_has_hallucinations_in_answer,
-    model_dont_understand_task,
-    model_get_big_and_hard_question,
-    model_not_enough_context,
-    model_get_provative_or_sensitive_question,
-    incorrect_formatt_of_response,
-    model_use_incorrect_type_of_tools,
-    user_waited_another_model_response,
-    HALLUCINATION_PHRASES,
-    MODEL_DONT_ANWER_PHRASES
-)
+from datetime import datetime
+import random
 
 class BaseModel(ABC):
     @abstractmethod
@@ -23,19 +11,60 @@ class BaseModel(ABC):
 class MockModel(BaseModel):
     def __init__(self, behavior: str):
         self.behavior = behavior
+        self.diff_hall = [
+            dict(title="встреча",
+                date="2025-04-25",
+                time="18:00:61",
+                loc="офис",
+                user="Сема",
+                url="https://zoom.us/..."
+            ),
+            dict(title="встреча",
+                date="2025-04-25",
+                time="25:00:00",
+                loc="офис",
+                user="Сема",
+                url="https://zoom.us/..."
+            ),
+            dict(title="встреча",
+                date="2025-04-25",
+                time="18:61:00",
+                loc="офис",
+                user="Сема",
+                url="https://zoom.us/..."
+            ),
+            dict(title="встреча",
+                date="2025-13-25",
+                time="18:00:00",
+                loc="офис",
+                user="Сема",
+                url="https://zoom.us/..."
+            ),
+            dict(title="встреча",
+                date="2025-04-40",
+                time="18:00:00",
+                loc="офис",
+                user="Сема",
+                url="https://zoom.us/..."
+            )
+        ]
 
-    def get_answer(self, prompt: str) -> str:
+    def get_answer(self, prompt: str, system_prompt: str | None = None) -> str:
         if self.behavior == "ok":
-            return "Ответ на запрос: " + prompt
+            return dict(
+                title="встреча",
+                date="2025-04-25",
+                time="18:00:00",
+                loc="офис",
+                user="Сема",
+                url="https://zoom.us/..."
+            )
 
         if self.behavior == "empty":
-            return ""
+            return dict()
 
         if self.behavior == "hallucination":
-            return "Франция украла флаг у России - это широко известно во всем мире"
-
-        if self.behavior == "refusal":
-            return "Я не могу помочь"
+            return self.diff_hall[random.randint(0, len(self.diff_hall) - 1)]
 
         raise RuntimeError("Model crashed")
 
@@ -43,8 +72,68 @@ class MockModel(BaseModel):
         return "Generated response based on prompt: " + prompt
 
 
+class Answer:
+    '''
+    {
+        "title": "встреча",        // Название события
+        "date": "2025-04-25",      // Дата (в формате YYYY-MM-DD)
+        "time": "18:00:00",        // Время (в формате HH:MM:SS)
+        "loc": "офис",             // Место проведения
+        "user": "Сема",            // Участники
+        "url": "https://zoom.us/..." // Ссылка (если есть)
+    }
+    '''
+    def __init__(self):
+        self.event = dict()
+        self.required_fields = ["title", "date", "time", "loc", "user"]
+
+    def is_valid_date(self) -> bool:
+        try:
+            datetime.strptime(self.event["date"], "%Y-%m-%d")
+            return True
+        except ValueError:
+            return False
+
+    def is_valid_time(self) -> bool:
+        try:
+            datetime.strptime(self.event["time"], "%H:%M:%S")
+            return True
+        except ValueError:
+            return False
+    
+    def add_answer(self, answer):
+        self.event["title"] = answer.get("title", "")
+        self.event["date"] = answer.get("date", "")
+        self.event["time"] = answer.get("time", "")
+        self.event["loc"] = answer.get("loc", "")
+        self.event["user"] = answer.get("user", "")
+        self.event["url"] = answer.get("url", "")
+    
+    def is_valid(self):
+        for field in self.required_fields:
+            if field not in self.event or not self.event[field]:
+                return False
+
+        if self.is_valid_date() is False:
+            return False
+        if self.is_valid_time() is False:
+            return False
+
+        return True
+    def __eq__(self, other):
+        return (
+            self.event == other.event
+        )
+    def __ne__(self, value):
+        return not self.__eq__(value)
+
+
 class Message:
-    def __init__(self, _user_content: str, _type: str, _system_content: str | None):
+    def __init__(self, _user_content: Answer | str, _type: str, _system_content: str | None):
+        '''
+        Если type = good -> _user_content = answer_for_user_promt(Answer),
+        иначе _user_content = promt_for_deep seek
+        '''
         self.user_content = _user_content
         self.system_content = _system_content
         self.type = _type
@@ -64,26 +153,27 @@ def build_messages(user_prompt: str, type_of_prompt: str, system_prompt: str | N
     return message
 
 
-def is_valid_response(text: str, prompt: str, _system_prompt: str | None = None) -> Message:
-    if text.strip() == "":
-        return build_messages(empty_response() + prompt, "regenerate", _system_prompt)
-    for phrase in MODEL_DONT_ANWER_PHRASES:
-        if phrase.lower() in text.lower():
-            return build_messages(model_dont_understand_task() + prompt, "regenerate", _system_prompt)
-    for phrase in HALLUCINATION_PHRASES:
-        if phrase in text.lower():
-            return build_messages(model_has_hallucinations_in_answer() + prompt, "regenerate", _system_prompt)
-    if len(text) < 10:
-        return build_messages(low_quality_output() + prompt, "regenerate", _system_prompt)
-
+def is_valid_response(text: Answer, prompt: str, _system_prompt: str | None = None) -> Message:
+    if not text.check():
+        return build_messages(prompt, "regenerate", _system_prompt)
     return build_messages(text, "good", _system_prompt)
 
-
 class FallbackManager:
-    def __init__(self, model: BaseModel):
+    '''
+        Менеджер для генерации ответов с помощью нашей модели, 
+        проверка качества ответа и обращение к модели дипсика,
+        если возникают проблемы.
+    '''
+    def __init__(self, model: BaseModel, deepspeak_model: BaseModel):
         self.model = model
+        self.deepspeak_model = deepspeak_model
 
     def run(self, prompt: str, system_prompt: str | None = None) -> str:
         response = self.model.get_answer(prompt)
 
-        return is_valid_response(response, system_prompt)
+        mess = is_valid_response(response, system_prompt)
+
+        if mess.type == "good":
+            return mess.user_content
+        else:
+            return self.deepspeak_model.get_answer(prompt)

@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Virtualenv
+.venv/
+venv/
+
+# Git
+.git/
+.gitignore
+
+# Tests & docs
+tests/
+docs/
+*.ipynb
+
+# Alembic cache
+alembic/versions/__pycache__/
+
+# OS
+.DS_Store

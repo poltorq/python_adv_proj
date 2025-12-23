@@ -1,0 +1,69 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: telegram-bot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: meeting_bot
+      POSTGRES_USER: bot_user
+      POSTGRES_PASSWORD: bot_password123
+    ports:
+      - "6432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bot_user"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bot-network
+
+  migrate:
+    image: poltorq/event-server-box:latest
+    container_name: telegram-bot-migrate
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://bot_user:bot_password123@postgres:5432/meeting_bot
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    networks:
+      - bot-network
+
+  server-app:
+    image: poltorq/event-server-box:latest
+    container_name: telegram-server-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://bot_user:bot_password123@postgres:5432/meeting_bot
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+    networks:
+      - bot-network
+
+  bot-app:
+    image: poltorq/event-bot-box:latest
+    container_name: telegram-bot-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      server-app:
+        condition: service_started
+    networks:
+      - bot-network
+
+volumes:
+  postgres_data:
+
+networks:
+  bot-network:

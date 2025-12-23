@@ -1,21 +1,34 @@
-FROM python:3.12-slim
-# Python docker images: https://github.com/docker-library/docs/tree/master/python/
+FROM python:3.12-alpine AS builder
 
-USER root
+WORKDIR /app
 
-# Copy the src
-WORKDIR /src
-COPY src/ /src/
-COPY ./requirements.txt /src
-RUN ls -la /src
+RUN apk add --no-cache \
+    build-base \
+    libffi-dev \
+    openssl-dev
 
-# Install python dependencies
-RUN python3 --version
-RUN pip3 install --upgrade pip
-RUN pip3 install --no-cache-dir -r /src/requirements.txt
-RUN pip3 list --format=columns
+COPY requirements-prod.txt .
 
-USER 1001
+RUN pip install --no-cache-dir \
+    --prefix=/install \
+    -r requirements-prod.txt
 
-# EXPOSE 5001
-ENTRYPOINT ["python3", "/src/cmd/server/server.py"]
+
+FROM python:3.12-alpine
+
+WORKDIR /app
+
+ENV PYTHONPATH=/app
+
+RUN apk add --no-cache \
+    libssl3 \
+    ca-certificates
+
+COPY --from=builder /install /usr/local
+COPY src ./src
+COPY alembic.ini .
+COPY alembic ./alembic
+
+EXPOSE 8000
+
+CMD ["uvicorn", "src.cmd.server.server:app", "--host", "0.0.0.0", "--port", "8000"]

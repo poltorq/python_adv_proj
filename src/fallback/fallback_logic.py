@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 import random
-
+import src.clients.deepseek.client as deep_client
 class BaseModel(ABC):
     @abstractmethod
     def generate(self, prompt: str, system_prompt: str | None = None) -> str:
@@ -49,7 +49,7 @@ class MockModel(BaseModel):
             )
         ]
 
-    def get_answer(self, prompt: str, system_prompt: str | None = None) -> str:
+    def get_answer(self, prompt: str, system_prompt: str | None = None) -> dict[str, str]:
         if self.behavior == "ok":
             return dict(
                 title="встреча",
@@ -72,91 +72,19 @@ class MockModel(BaseModel):
         return "Generated response based on prompt: " + prompt
 
 
-class Answer:
-    '''
-    {
-        "title": "встреча",        // Название события
-        "date": "2025-04-25",      // Дата (в формате YYYY-MM-DD)
-        "time": "18:00:00",        // Время (в формате HH:MM:SS)
-        "loc": "офис",             // Место проведения
-        "user": "Сема",            // Участники
-        "url": "https://zoom.us/..." // Ссылка (если есть)
-    }
-    '''
-    def __init__(self):
-        self.event = dict()
-        self.required_fields = ["title", "date", "time", "loc", "user"]
-
-    def is_valid_date(self) -> bool:
-        try:
-            datetime.strptime(self.event["date"], "%Y-%m-%d")
-            return True
-        except ValueError:
-            return False
-
-    def is_valid_time(self) -> bool:
-        try:
-            datetime.strptime(self.event["time"], "%H:%M:%S")
-            return True
-        except ValueError:
-            return False
-    
-    def add_answer(self, answer):
-        self.event["title"] = answer.get("title", "")
-        self.event["date"] = answer.get("date", "")
-        self.event["time"] = answer.get("time", "")
-        self.event["loc"] = answer.get("loc", "")
-        self.event["user"] = answer.get("user", "")
-        self.event["url"] = answer.get("url", "")
-    
-    def is_valid(self):
-        for field in self.required_fields:
-            if field not in self.event or not self.event[field]:
-                return False
-
-        if self.is_valid_date() is False:
-            return False
-        if self.is_valid_time() is False:
-            return False
-
+def is_valid_date(date: str) -> bool:
+    try:
+        datetime.strptime(date, "%Y-%m-%d")
         return True
-    def __eq__(self, other):
-        return (
-            self.event == other.event
-        )
-    def __ne__(self, value):
-        return not self.__eq__(value)
+    except ValueError:
+        return False
 
-
-class Message:
-    def __init__(self, _user_content: Answer | str, _type: str, _system_content: str | None):
-        '''
-        Если type = good -> _user_content = answer_for_user_promt(Answer),
-        иначе _user_content = promt_for_deep seek
-        '''
-        self.user_content = _user_content
-        self.system_content = _system_content
-        self.type = _type
-
-    def __eq__(self, other):
-        return (
-            self.user_content == other.user_content and
-            self.system_content == other.system_content and
-            self.type == other.type
-        )
-    def __ne__(self, value):
-        return not self.__eq__(value)
-
-
-def build_messages(user_prompt: str, type_of_prompt: str, system_prompt: str | None) -> Message:
-    message = Message(user_prompt, type_of_prompt, system_prompt)
-    return message
-
-
-def is_valid_response(text: Answer, prompt: str, _system_prompt: str | None = None) -> Message:
-    if not text.check():
-        return build_messages(prompt, "regenerate", _system_prompt)
-    return build_messages(text, "good", _system_prompt)
+def is_valid_time(time: str) -> bool:
+    try:
+        datetime.strptime(time, "%H:%M:%S")
+        return True
+    except ValueError:
+        return False
 
 class FallbackManager:
     '''
@@ -164,16 +92,61 @@ class FallbackManager:
         проверка качества ответа и обращение к модели дипсика,
         если возникают проблемы.
     '''
-    def __init__(self, model: BaseModel, deepspeak_model: BaseModel):
+    def __init__(self, model: BaseModel):
         self.model = model
-        self.deepspeak_model = deepspeak_model
+        self.deepspeak_model = deep_client.DeepSeekClient(deep_client.AppConfig(
+            bot={
+                "token": "mock-bot-token",
+                "admins": [],
+                "use_webhook": False
+            },
+            deepseek=deep_client.DeepSeekConfig(api_key="mock-api-key"),
+            debug=True,
+            log_level="INFO"
+        ))
 
-    def run(self, prompt: str, system_prompt: str | None = None) -> str:
-        response = self.model.get_answer(prompt)
+    def run(self, request: deep_client.ChatRequest, prompt: deep_client.Message) -> dict[str, str]:
+        # Ideal structure for validation
+        ideal_structure = {
+            "title": "встреча",
+            "date": "2025-04-25",
+            "time": "18:00:00",
+            "loc": "офис",
+            "user": "Сема",
+            "url": "https://zoom.us/..."
+        }
 
-        mess = is_valid_response(response, system_prompt)
+        # Get response from the custom model
+        custom_response = self.model.get_answer(prompt)
 
-        if mess.type == "good":
-            return mess.user_content
+        # Get response from DeepSeek
+        deepseek_response = {}
+        try:
+            self.deepspeak_model.validate_connection()
+            deepseek_response = self.deepspeak_model.chat_completion(request).content
+        except RuntimeError as e:
+            print(f"DeepSeek API error: {e}")
+
+        # Validate responses against the ideal structure
+        def validate_response(response):
+            return all(key in response and response[key] for key in ideal_structure) and \
+            is_valid_date(response["date"]) and is_valid_time(response["time"])
+    
+        custom_valid = validate_response(custom_response)
+        deepseek_valid = validate_response(deepseek_response)
+
+        # Compare and select the best response
+        if custom_valid and not deepseek_valid:
+            return custom_response
+        elif deepseek_valid and not custom_valid:
+            return deepseek_response
+        elif custom_valid and deepseek_valid:
+            # Both are valid, prioritize custom response
+            return custom_response
         else:
-            return self.deepspeak_model.get_answer(prompt)
+            # Neither is valid, log and return DeepSeek response
+            print("Neither response matches the ideal structure.")
+            print(f"Custom model response: {custom_response}")
+            print(f"DeepSeek response: {deepseek_response}")
+            return deepseek_response
+

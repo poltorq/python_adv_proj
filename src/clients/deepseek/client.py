@@ -50,6 +50,13 @@ class Usage:
     total_tokens: int  # Всего токенов (prompt + completion)
 
 
+@dataclass
+class DeepSeekConfig:
+    api_key: str
+    base_url: str = "https://api.deepseek.com"
+    model: str = "default-model"
+
+
 class DeepSeekClient:
     """
     Клиент для работы с DeepSeek API через OpenAI SDK.

@@ -6,8 +6,8 @@ from tqdm import tqdm
 LOCAL_DATASET_PATH = "dataset.jsonl"
 OUTPUT_PATH = "dataset_full.jsonl"
 
-LIMIT_SYNTHETIC = 6000  # Берем только первые 5000 строк из генератора
-LIMIT_NOISE = 2000  # Берем 2000 строк мусора из MASSIVE
+LIMIT_SYNTHETIC = 9000 # 9к генерим
+LIMIT_NOISE = 1000 # 1к шума
 
 TAG_MAPPING = {
     "date": "DATE",
@@ -51,86 +51,84 @@ def parse_massive_utt(annot_utt):
     return tokens, tags
 
 
-def main():
-    data_files = {
-        "train": "https://huggingface.co/datasets/AmazonScience/massive/resolve/refs/convert/parquet/ru-RU/train/0000.parquet",
-        "validation": "https://huggingface.co/datasets/AmazonScience/massive/resolve/refs/convert/parquet/ru-RU/validation/0000.parquet",
-        "test": "https://huggingface.co/datasets/AmazonScience/massive/resolve/refs/convert/parquet/ru-RU/test/0000.parquet"
-    }
-    dataset_dict = load_dataset("parquet", data_files=data_files)
-    full_dataset = concatenate_datasets([dataset_dict["train"], dataset_dict["validation"], dataset_dict["test"]])
+data_files = {
+    "train": "https://huggingface.co/datasets/AmazonScience/massive/resolve/refs/convert/parquet/ru-RU/train/0000.parquet",
+    "validation": "https://huggingface.co/datasets/AmazonScience/massive/resolve/refs/convert/parquet/ru-RU/validation/0000.parquet",
+    "test": "https://huggingface.co/datasets/AmazonScience/massive/resolve/refs/convert/parquet/ru-RU/test/0000.parquet"
+}
+dataset_dict = load_dataset("parquet", data_files=data_files)
+full_dataset = concatenate_datasets([dataset_dict["train"], dataset_dict["validation"], dataset_dict["test"]])
 
-    # CALENDAR SAMPLES
-    if isinstance(full_dataset[0]["scenario"], int):
-        calendar_data = full_dataset.filter(lambda x: x["scenario"] == 2)
-        other_data = full_dataset.filter(lambda x: x["scenario"] != 2)
-    else:
-        calendar_data = full_dataset.filter(lambda x: str(x["scenario"]) == "2")
-        other_data = full_dataset.filter(lambda x: str(x["scenario"]) != "2")
+# CALENDAR SAMPLES
+if isinstance(full_dataset[0]["scenario"], int):
+    calendar_data = full_dataset.filter(lambda x: x["scenario"] == 2)
+    other_data = full_dataset.filter(lambda x: x["scenario"] != 2)
+else:
+    calendar_data = full_dataset.filter(lambda x: str(x["scenario"]) == "2")
+    other_data = full_dataset.filter(lambda x: str(x["scenario"]) != "2")
 
-    print(f'calendar_len : {len(calendar_data)}')
+print(f'calendar_len : {len(calendar_data)}')
 
-    # NOISE
-    if len(other_data) > LIMIT_NOISE:
-        noise_data = other_data.shuffle(seed=42).select(range(LIMIT_NOISE))
-    else:
-        noise_data = other_data
+# NOISE
+if len(other_data) > LIMIT_NOISE:
+    noise_data = other_data.shuffle(seed=42).select(range(LIMIT_NOISE))
+else:
+    noise_data = other_data
 
-    print(f'noise_len : {len(noise_data)}')
+print(f'noise_len : {len(noise_data)}')
 
-    final_data = []
+final_data = []
 
-    synthetic_count = 0
-    with open(LOCAL_DATASET_PATH, "r", encoding="utf-8") as f:
-        for line in f:
-            if line.strip():
-                entry = json.loads(line)
-                # Фильтр: только русский и пока не достигли лимита
-                if entry.get("lang") == "ru":
-                    final_data.append(entry)
-                    synthetic_count += 1
+synthetic_count = 0
+with open(LOCAL_DATASET_PATH, "r", encoding="utf-8") as f:
+    for line in f:
+        if line.strip():
+            entry = json.loads(line)
+            if entry.get("lang") == "ru":
+                final_data.append(entry)
+                synthetic_count += 1
 
-                if synthetic_count >= LIMIT_SYNTHETIC:
-                    break
-    print(f'generated_len: {synthetic_count}')
+            if synthetic_count >= LIMIT_SYNTHETIC:
+                break
+print(f'generated_len: {synthetic_count}')
 
-    # parsiong calendar
-    for row in tqdm(calendar_data):
-        annot_utt = row.get("annot_utt")
-        if not annot_utt: continue
-        try:
-            tokens, new_tags = parse_massive_utt(annot_utt)
-            final_data.append({
-                "id": int(row["id"]) if "id" in row else 0,
-                "lang": "ru",
-                "text": " ".join(tokens),
-                "tokens": tokens,
-                "ner_tags": new_tags,
-                "slots": {}
-            })
-        except:
-            continue
-
-    # parsing noise
-    for row in tqdm(noise_data):
-        text = row.get("utt")
-        if not text: continue
-
-        tokens = text.split()
-        new_tags = ["O"] * len(tokens)  # Затираем любые теги
-
+# parsiong calendar
+for row in tqdm(calendar_data):
+    annot_utt = row.get("annot_utt")
+    if not annot_utt: continue
+    try:
+        tokens, new_tags = parse_massive_utt(annot_utt)
         final_data.append({
             "id": int(row["id"]) if "id" in row else 0,
             "lang": "ru",
-            "text": text,
+            "text": " ".join(tokens),
             "tokens": tokens,
             "ner_tags": new_tags,
             "slots": {}
         })
+    except Exception as e:
+        continue
 
-    print(f'final_len : {len(final_data)}')
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        for entry in final_data:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+# parsing noise
+for row in tqdm(noise_data):
+    text = row.get("utt")
+    if not text: continue
 
-    print(f"done, full dataset at {OUTPUT_PATH}")
+    tokens = text.split()
+    new_tags = ["O"] * len(tokens)
+
+    final_data.append({
+        "id": int(row["id"]) if "id" in row else 0,
+        "lang": "ru",
+        "text": text,
+        "tokens": tokens,
+        "ner_tags": new_tags,
+        "slots": {}
+    })
+
+print(f'final_len : {len(final_data)}')
+with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
+    for entry in final_data:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+print(f"done, full dataset at {OUTPUT_PATH}")

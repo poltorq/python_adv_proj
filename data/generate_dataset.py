@@ -7,7 +7,6 @@ from generators import sample_date, sample_time, sample_people, sample_link, sam
 
 random.seed(42)
 # mapping and slots stuff
-# p s I think we need to deprecate it and make names of slots similar to docs, but it's unnecessary now
 SLOT_TO_TAG = {
     "event_name": "TITLE",
     "place": "LOC",
@@ -68,7 +67,7 @@ def build_text_with_spans(raw_text: str, slot_values: Dict[str, str]) -> Tuple[s
                 start = current_pos
                 end = current_pos + len(val)
                 tag_label = SLOT_TO_TAG.get(slot_name,
-                                            slot_name.upper())  # should be deleted as soon as I change naming
+                                            slot_name.upper())
 
                 entities.append({
                     "start": start,
@@ -128,7 +127,7 @@ def generate_and_tokenize(template: MessageTemplate, lang: str = "ru") -> Dict[s
     ner_tags = create_bio_tags(tokens_with_offsets, entities)
 
     return {
-        "id": random.randint(100000, 999999),  # or = 1, ... , N ???
+        "id": random.randint(100000, 999999),
         "lang": lang,
         "text": final_text,
         "tokens": tokens,

@@ -13,22 +13,12 @@ from src.clients.deepseek.client import ChatRequest, Message, AppConfig
 from src.config.config import BotConfig
 
 # Ensure required environment variables are set for tests
-os.environ['DeepSeek_api_key'] = 'mock-api-key'
+os.environ['DeepSeek_api_key'] = os.getenv('DEEPSEEK_API_KEY')
 os.environ['BOT_TOKEN'] = 'mock-bot-token'
-
-class MockDeepSeekClient:
-    def __init__(self, response):
-        self.response = response
-
-    def validate_connection(self):
-        pass
-
-    def chat_completion(self, request):
-        return self.response
 
 @dataclass
 class DeepSeekConfig:
-    api_key: str
+    api_key: str = os.getenv('DEEPSEEK_API_KEY')
 
 def create_mock_app_config():
     return AppConfig(
@@ -114,120 +104,75 @@ def test_time_validation_func():
     for time in invalid_times:
         assert is_valid_time(time) == False
 
-# @patch("deepseek_client.DeepSeekClient.validate_connection", return_value=None)
-# @patch("deepseek_client.DeepSeekClient", autospec=True)
-# def test_fallback_logic_custom_valid(mock_deepseek_client, mock_validate_connection):
-#     mock_deepseek_client.return_value = MagicMock()  # Mock the entire client
-#     model = MockModel("ok")
-#     fallback_manager = FallbackManager(model)
-#     fallback_manager.deepspeak_model = MockDeepSeekClient(
-#         response=Message(
-#             role="assistant",
-#             content={
-#                 "title": "встреча",
-#                 "date": "2025-04-25",
-#                 "time": "18:00:00",
-#                 "loc": "офис",
-#                 "user": "Сема",
-#                 "url": "https://zoom.us/..."
-#             }
-#         )
-#     )
+@patch("src.clients.deepseek.client.DeepSeekClient.validate_connection", return_value=None)
+def test_fallback_logic_manual(mock_validate_connection):
+    model = MockModel("ok")
+    fallback_manager = FallbackManager(model)
 
-#     request = ChatRequest(messages=[])
-#     prompt = Message(role="user", content="Test prompt")
+    # Scenario 1: Valid custom response, invalid DeepSeek response
+    custom_response = {
+        "title": "встреча",
+        "date": "2025-04-25",
+        "time": "18:00:00",
+        "loc": "офис",
+        "user": "Сема",
+        "url": "https://zoom.us/..."
+    }
+    deepseek_response = {}
 
-#     result = fallback_manager.run(request, prompt)
-#     assert result == {
-#         "title": "встреча",
-#         "date": "2025-04-25",
-#         "time": "18:00:00",
-#         "loc": "офис",
-#         "user": "Сема",
-#         "url": "https://zoom.us/..."
-#     }
+    fallback_manager.model.get_answer = lambda prompt: custom_response
+    fallback_manager.deepspeak_model.chat_completion = lambda request: MagicMock(content=deepseek_response)
 
-# @patch("deepseek_client.DeepSeekClient.validate_connection", return_value=None)
-# @patch("deepseek_client.DeepSeekClient", autospec=True)
-# def test_fallback_logic_deepseek_valid(mock_deepseek_client, mock_validate_connection):
-#     mock_deepseek_client.return_value = MagicMock()  # Mock the entire client
-#     model = MockModel("empty")
-#     fallback_manager = FallbackManager(model)
-#     fallback_manager.deepspeak_model = MockDeepSeekClient(
-#         response=Message(
-#             role="assistant",
-#             content={
-#                 "title": "встреча",
-#                 "date": "2025-04-25",
-#                 "time": "18:00:00",
-#                 "loc": "офис",
-#                 "user": "Сема",
-#                 "url": "https://zoom.us/..."
-#             }
-#         )
-#     )
+    result = fallback_manager.run(ChatRequest(messages=[]), Message(role="user", content="Test prompt"))
+    assert result == custom_response
 
-#     request = ChatRequest(messages=[])
-#     prompt = Message(role="user", content="Test prompt")
+    # Scenario 2: Invalid custom response, valid DeepSeek response
+    custom_response = {}
+    deepseek_response = {
+        "title": "встреча",
+        "date": "2025-04-25",
+        "time": "18:00:00",
+        "loc": "офис",
+        "user": "Сема",
+        "url": "https://zoom.us/..."
+    }
 
-#     result = fallback_manager.run(request, prompt)
-#     assert result == {
-#         "title": "встреча",
-#         "date": "2025-04-25",
-#         "time": "18:00:00",
-#         "loc": "офис",
-#         "user": "Сема",
-#         "url": "https://zoom.us/..."
-#     }
+    fallback_manager.model.get_answer = lambda prompt: custom_response
+    fallback_manager.deepspeak_model.chat_completion = lambda request: MagicMock(content=deepseek_response)
 
-# @patch("deepseek_client.DeepSeekClient.validate_connection", return_value=None)
-# @patch("deepseek_client.DeepSeekClient", autospec=True)
-# def test_fallback_logic_neither_valid(mock_deepseek_client, mock_validate_connection):
-#     mock_deepseek_client.return_value = MagicMock()  # Mock the entire client
-#     model = MockModel("hallucination")
-#     fallback_manager = FallbackManager(model)
-#     fallback_manager.deepspeak_model = MockDeepSeekClient(
-#         response=Message(
-#             role="assistant",
-#             content={}
-#         )
-#     )
+    result = fallback_manager.run(ChatRequest(messages=[]), Message(role="user", content="Test prompt"))
+    assert result == deepseek_response
 
-#     request = ChatRequest(messages=[])
-#     prompt = Message(role="user", content="Test prompt")
+    # Scenario 3: Both responses valid
+    custom_response = {
+        "title": "встреча",
+        "date": "2025-04-25",
+        "time": "18:00:00",
+        "loc": "офис",
+        "user": "Сема",
+        "url": "https://zoom.us/..."
+    }
+    deepseek_response = {
+        "title": "встреча",
+        "date": "2025-04-25",
+        "time": "18:00:00",
+        "loc": "офис",
+        "user": "Сема",
+        "url": "https://zoom.us/..."
+    }
 
-#     result = fallback_manager.run(request, prompt)
-#     assert result == {}
+    fallback_manager.model.get_answer = lambda prompt: custom_response
+    fallback_manager.deepspeak_model.chat_completion = lambda request: MagicMock(content=deepseek_response)
 
-# @patch("deepseek_client.DeepSeekClient.validate_connection", return_value=None)
-# @patch("deepseek_client.DeepSeekClient", autospec=True)
-# def test_fallback_logic_both_valid(mock_deepseek_client, mock_validate_connection):
-#     mock_deepseek_client.return_value = MagicMock()  # Mock the entire client
-#     model = MockModel("ok")
-#     fallback_manager = FallbackManager(model)
-#     fallback_manager.deepspeak_model = MockDeepSeekClient(
-#         response=Message(
-#             role="assistant",
-#             content={
-#                 "title": "встреча",
-#                 "date": "2025-04-25",
-#                 "time": "18:00:00",
-#                 "loc": "офис",
-#                 "user": "Сема",
-#                 "url": "https://zoom.us/..."
-#             }
-#         )
-#     )
+    result = fallback_manager.run(ChatRequest(messages=[]), Message(role="user", content="Test prompt"))
+    assert result == custom_response
 
-#     request = ChatRequest(messages=[])
-#     prompt = Message(role="user", content="Test prompt")
+    # Scenario 4: Neither response valid
+    custom_response = {}
+    deepseek_response = {}
 
-#     result = fallback_manager.run(request, prompt)
-#     assert result == {
-#         "title": "встреча",
-#         "date": "2025-04-25",
-#         "time": "18:00:00",
-#         "loc": "офис",
-#         "user": "Сема",
-#         "url": "https://zoom.us/..."
-#     }
+    fallback_manager.model.get_answer = lambda prompt: custom_response
+    fallback_manager.deepspeak_model.chat_completion = lambda request: MagicMock(content=deepseek_response)
+
+    result = fallback_manager.run(ChatRequest(messages=[]), Message(role="user", content="Test prompt"))
+    assert result == deepseek_response

@@ -176,7 +176,7 @@ load_dotenv()
 def test_if_it_actually_works():
     """No joking: real test if all this
     code works & produces answers"""
-    client = DeepSeekClient()
+    client = DeepSeekClient(api_key=os.getenv("DEEPSEEK_API_KEY"))
 
     response = client.client.chat.completions.create(
         model=client.model,

@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 import random
+import os
 import src.clients.deepseek.client as deep_client
 class BaseModel(ABC):
     @abstractmethod
@@ -96,11 +97,11 @@ class FallbackManager:
         self.model = model
         self.deepspeak_model = deep_client.DeepSeekClient(deep_client.AppConfig(
             bot={
-                "token": "mock-bot-token",
+                "token": os.getenv("TELEGRAM_TOKEN"),
                 "admins": [],
                 "use_webhook": False
             },
-            deepseek=deep_client.DeepSeekConfig(api_key="mock-api-key"),
+            deepseek=deep_client.DeepSeekConfig(api_key=os.getenv("DEEPSEEK_API_KEY")),
             debug=True,
             log_level="INFO"
         ))
@@ -129,24 +130,20 @@ class FallbackManager:
 
         # Validate responses against the ideal structure
         def validate_response(response):
-            return all(key in response and response[key] for key in ideal_structure) and \
-            is_valid_date(response["date"]) and is_valid_time(response["time"])
-    
+            return (
+                "title" in response and response["title"] and
+                "date" in response and is_valid_date(response["date"])
+            )
+
         custom_valid = validate_response(custom_response)
-        deepseek_valid = validate_response(deepseek_response)
 
         # Compare and select the best response
-        if custom_valid and not deepseek_valid:
-            return custom_response
-        elif deepseek_valid and not custom_valid:
-            return deepseek_response
-        elif custom_valid and deepseek_valid:
-            # Both are valid, prioritize custom response
+        if custom_valid:
+            # If DeepSeek response has more values, prioritize it
+            if len(deepseek_response) > len(custom_response):
+                return deepseek_response
             return custom_response
         else:
-            # Neither is valid, log and return DeepSeek response
-            print("Neither response matches the ideal structure.")
-            print(f"Custom model response: {custom_response}")
-            print(f"DeepSeek response: {deepseek_response}")
+            # If custom response is invalid, return DeepSeek response
             return deepseek_response
 

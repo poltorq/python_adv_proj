@@ -88,6 +88,10 @@ class DeepSeekClient:
             base_url=config.deepseek.base_url,
             timeout=30,  # Таймаут запроса в секундах
             max_retries=3,  # Максимальное количество попыток при ошибках
+            default_headers={
+                "HTTP-Referer": "http://localhost",   # или URL твоего проекта
+                "X-Title": "python-adv-proj",          # любое имя приложения
+            },
         )
         self.model = config.deepseek.model  # Модель DeepSeek для использования
         self.validate_connection()  # Проверяем подключение к API

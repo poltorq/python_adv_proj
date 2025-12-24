@@ -7,8 +7,10 @@ from aiogram import Bot, Dispatcher
 from src.services.logger import setup_logger  # type: ignore
 from src.handlers import routers  # type: ignore
 
-# Добавляем путь к src
-sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+# Добавляем путь к корню проекта для импорта model
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 
 # Настройка
@@ -22,6 +24,15 @@ logger = setup_logger(__name__)
 
 async def main() -> None:
     """Основная функция запуска бота"""
+    # Предзагрузка NER модели
+    try:
+        from model import get_pipeline
+        logger.info("🧠 Загрузка NER модели...")
+        get_pipeline()
+        logger.info("✅ NER модель загружена")
+    except Exception as e:
+        logger.warning(f"⚠️ NER модель не загружена: {e}")
+    
     # Создаем объекты
     bot = Bot(token=TOKEN)  # type: ignore
     dp = Dispatcher()

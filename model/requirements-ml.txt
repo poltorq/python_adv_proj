@@ -1,0 +1,15 @@
+# ML dependencies for NER model training
+
+torch>=2.0.0
+transformers>=4.35.0
+datasets>=2.14.0
+accelerate>=0.24.0
+seqeval>=1.2.2
+scikit-learn>=1.3.0
+numpy>=1.24.0
+pandas>=2.0.0
+tqdm>=4.66.0
+jupyter>=1.0.0
+ipywidgets>=8.1.0
+matplotlib>=3.8.0
+

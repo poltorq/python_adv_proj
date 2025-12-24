@@ -2,6 +2,7 @@ import os
 from openai import base_url
 import pytest
 
+from model import extract_event, format_event_for_display, process_text
 from src.clients.deepseek.client import DeepSeekClient, DeepSeekConfig, ChatRequest, Message
 import deepseek_client
 from src.config.config import AppConfig
@@ -82,30 +83,21 @@ def test_if_it_actually_works():
 
     print(response)
 
-# @pytest.mark.integration
-# def test_fallback_manager_real_deepseek_request():
-#     model = MockModel("empty")  # Custom model возвращает пустой ответ
-#     fallback_manager = FallbackManager(model)
 
-#     user_message = Message(role="user", 
-#         content="Преобразуй запрос пользователь в подобный формат: { \
-#             \"title\": \"встреча\", \
-#             \"date\": \"2025-04-25\", \
-#             \"time\": \"18:00:00\", \
-#             \"loc\": \"офис\", \
-#             \"user\": \"Сема\", \
-#             \"url\": \"https://zoom.us/...\" \
-#         } \
-#         Вот сам запрос: Встреча 2025-04-25 с Семой в офисе в 18:00 по Zoom. Вот ссылка: https://zoom.us/...")
-#     chat_request = ChatRequest(messages=[])
 
-#     # Отправляем реальный запрос в DeepSeek API
-#     result = fallback_manager.run(chat_request, user_message)
+@pytest.mark.integration
+def test_fallback_manager_real_deepseek_request():
+    fallback_manager = FallbackManager()
 
-#     # Проверяем, что результат содержит ожидаемые ключи
-#     assert "title" in result
-#     assert "date" in result
-#     assert "time" in result
-#     assert "loc" in result
-#     assert "user" in result
-#     assert "url" in result
+    user_message = Message(role="user", 
+        content="Встреча 2025-04-25 с Семой в офисе в 18:00 по Zoom. Вот ссылка: https://zoom.us/...")
+    chat_request = ChatRequest(messages=[])
+
+    # Отправляем реальный запрос в DeepSeek API
+    result = fallback_manager.run(chat_request, user_message)
+    assert "title" in result
+    assert "date" in result
+    assert "time" in result
+    assert "loc" in result
+    assert "user" in result
+    assert "url" in result

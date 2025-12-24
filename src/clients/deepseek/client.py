@@ -54,7 +54,7 @@ class Usage:
 class DeepSeekConfig:
     api_key: str
     base_url: str = "https://openrouter.ai/api/v1"
-    model: str = "nex-agi/deepseek-v3.1-nex-n1:free"
+    model: str = "tngtech/deepseek-r1t2-chimera:free"
 
 
 class DeepSeekClient:

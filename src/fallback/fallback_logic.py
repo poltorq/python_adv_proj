@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 import random
 import os
+
+from model import extract_event, format_event_for_display, process_text
 import src.clients.deepseek.client as deep_client
 from src.clients.deepseek.client import DeepSeekClient, DeepSeekConfig
 from src.config.config import AppConfig
@@ -95,9 +97,17 @@ class FallbackManager:
         Менеджер для генерации ответов с помощью нашей модели, 
         проверка качества ответа и обращение к модели дипсика,
         если возникают проблемы.
+        Ideal structure for validation
+        ideal_structure = {
+            "title": "встреча",
+            "date": "2025-04-25",
+            "time": "18:00:00",
+            "loc": "офис",
+            "user": "Сема",
+            "url": "https://zoom.us/..."
+        }
     '''
-    def __init__(self, model: BaseModel):
-        self.model = model
+    def __init__(self):
         config = AppConfig(
             bot={
                 "token": os.getenv("TELEGRAM_TOKEN"),
@@ -117,26 +127,11 @@ class FallbackManager:
         self.deepspeak_model = DeepSeekClient(config)
 
     def run(self, request: deep_client.ChatRequest, prompt: deep_client.Message) -> dict[str, str]:
-        # Ideal structure for validation
-        ideal_structure = {
-            "title": "встреча",
-            "date": "2025-04-25",
-            "time": "18:00:00",
-            "loc": "офис",
-            "user": "Сема",
-            "url": "https://zoom.us/..."
-        }
-
         # Get response from the custom model
-        custom_response = self.model.get_answer(prompt)
 
-        # Get response from DeepSeek
-        deepseek_response = {}
-        try:
-            self.deepspeak_model.validate_connection()
-            deepseek_response = self.deepspeak_model.chat_completion(request).content
-        except RuntimeError as e:
-            print(f"DeepSeek API error: {e}")
+        
+        # custom_response = extract_event(prompt.content)
+        custom_response = {}
 
         # Validate responses against the ideal structure
         def validate_response(response):
@@ -149,11 +144,20 @@ class FallbackManager:
 
         # Compare and select the best response
         if custom_valid:
-            # If DeepSeek response has more values, prioritize it
-            if len(deepseek_response) > len(custom_response):
-                return deepseek_response
             return custom_response
         else:
-            # If custom response is invalid, return DeepSeek response
-            return deepseek_response
-
+            try:
+                cont= "Преобразуй запрос пользователь в подобный формат: { \
+                    \"title\": \"встреча\", \
+                    \"date\": \"2025-04-25\", \
+                    \"time\": \"18:00:00\", \
+                    \"loc\": \"офис\", \
+                    \"user\": \"Сема\", \
+                    \"url\": \"https://zoom.us/...\" \
+                } Вот сам запрос: "
+                prompt.content = cont + prompt.content
+                request.messages.append(prompt)
+                self.deepspeak_model.validate_connection()
+                return self.deepspeak_model.chat_completion(request).content
+            except RuntimeError as e:
+                print(f"DeepSeek API error: {e}")

@@ -19,13 +19,7 @@ async def echo_all(message: Message) -> None:
         return
 
     logger.info(f"Пользователь {user.id} ({user.username}): {text}")
-    await message.answer(
-        LEXICON_RU['echo_message'].format(
-            text=text,
-            user_id=user.id,
-            length=len(text)
-        )
-    )
+    await message.answer("Некорректный ввод")
 
 
 # Декораторы исправлены с Text(...) на F.text == "..."

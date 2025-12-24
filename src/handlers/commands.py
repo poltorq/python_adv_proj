@@ -16,6 +16,12 @@ from src.keyboards.keyboards import (
     get_confirmation_keyboard,
     get_add_another_event_keyboard,
     get_ai_back_keyboard,
+    get_cancel_keyboard,
+    get_calendar_date_keyboard,
+    get_calendar_list_keyboard,
+    get_event_edit_keyboard,
+    get_events_list_keyboard
+
 )
 from src.service.calendar.client import SimpleGoogleCalendar
 from model import process_text, extract_event, format_event_for_display
@@ -87,6 +93,18 @@ class EventStates(StatesGroup):
     # AI mode states
     waiting_for_text = State()
     ai_confirmation = State()
+    # New states for calendar management
+    calendar_list = State()
+    choose_calendar = State()
+    calendar_events_day = State()
+    choose_event_for_day = State()
+    create_calendar_name = State()
+    create_calendar_details = State()
+    delete_calendar_confirm = State()
+    event_edit_select = State()
+    event_edit_field = State()
+    event_edit_value = State()
+    delete_event_confirm = State()
 
 
 # === START ===
@@ -300,7 +318,7 @@ async def confirm_ai_event(callback: types.CallbackQuery, state: FSMContext):
                 f"✅ Событие создано!\n\n"
                 f"📝 {event.get('summary', title)}\n"
                 f"📅 {dt_start.strftime('%d.%m.%Y %H:%M')}\n"
-                f"🔗 {event.get('htmlLink', '-')}"
+                f"🔗 {event.get('html_link', '-')}"
             )
 
         except Exception as e:
@@ -476,6 +494,7 @@ async def go_back(callback: types.CallbackQuery, state: FSMContext):
         await callback.message.edit_text("Выберите режим события:", reply_markup=get_mode_keyboard())
 
 
+
     await callback.answer()
 
 # === Going back to the begining ===
@@ -491,15 +510,865 @@ async def add_another_event(callback: types.CallbackQuery, state: FSMContext):
 
     await callback.answer()
 
+@router.message(Command("echo"))
+async def cmd_echo(message: types.Message) -> None:
+    await message.answer("Некорректный ввод")
+
+# === HELP COMMAND ===
+@router.message(Command("help"))
+async def cmd_help(message: types.Message):
+    """Показать справку по командам"""
+    help_text = """
+            📋 *Доступные команды:*
+            
+            *Основные:*
+            /start - Начать работу с ботом
+            /auth - Подключить Google Calendar
+            /help - Эта справка
+            
+            *Работа с календарями:*
+            /calendars - Показать все мои календари
+            /new_calendar - Создать новый календарь
+            
+            *Работа с событиями:*
+            /events - Показать события на сегодня
+            /create_event - Создать событие вручную
+            /ai_event - Создать событие с помощью AI
+            
+            *Управление событиями:*
+            /edit_event - Редактировать существующее событие
+            /delete_event - Удалить событие
+            /delete_calendar - Удалить календарь
+            
+            *Как использовать:*
+            1️⃣ Сначала авторизуйтесь через /auth
+            2️⃣ Посмотрите свои календари через /calendars
+            3️⃣ Создавайте события через /create_event или /ai_event
+            4️⃣ Управляйте событиями через /edit_event или /delete_event
+            
+            💡 *Совет:* Также можно просто нажать /start для начала работы с меню!
+            """
+    await message.answer(help_text, parse_mode="Markdown")
+
+
+# === NEW CALENDAR COMMAND ===
+@router.message(Command("new_calendar"))
+async def cmd_new_calendar(message: types.Message, state: FSMContext):
+    """Создать новый календарь"""
+    telegram_id = message.from_user.id
+    tokens = await get_user_tokens(telegram_id)
+
+    if not tokens:
+        await message.answer("❌ Авторизуйтесь через Google: /auth")
+        return
+
+    await message.answer(
+        "📝 Введите название нового календаря:",
+        reply_markup=get_cancel_keyboard()
+    )
+    await state.set_state(EventStates.create_calendar_name)
+
+
+# === CALENDARS COMMAND ===
+@router.message(Command("calendars"))
+async def cmd_calendars(message: types.Message, state: FSMContext):
+    """Показать список всех календарей"""
+    telegram_id = message.from_user.id
+    tokens = await get_user_tokens(telegram_id)
+
+    if not tokens:
+        await message.answer("❌ Авторизуйтесь через Google: /auth")
+        return
+
+    try:
+        gcal = SimpleGoogleCalendar(
+            client_id=tokens['client_id'],
+            client_secret=tokens['client_secret']
+        )
+
+        calendars = gcal.list_calendars(
+            access_token=tokens['access_token'],
+            refresh_token=tokens['refresh_token']
+        )
+
+        if not calendars:
+            await message.answer("📭 У вас нет календарей.")
+            return
+
+        text = "📅 *Ваши календари:*\n\n"
+        for idx, cal in enumerate(calendars, 1):
+            primary = "⭐ " if cal.get('primary') else ""
+            text += f"*{idx}. {primary}{cal.get('summary')}*\n"
+            if cal.get('description'):
+                text += f"   Описание: {cal.get('description')[:50]}...\n"
+            if cal.get('time_zone'):
+                text += f"   Часовой пояс: {cal.get('time_zone')}\n"
+            text += "\n"
+
+        text += "💡 *Выберите календарь для работы с ним*"
+
+        await message.answer(
+            text,
+            parse_mode="Markdown",
+            reply_markup=get_calendar_list_keyboard(calendars)
+        )
+        await state.set_state(EventStates.calendar_list)
+
+    except Exception as e:
+        await message.answer(f"❌ Ошибка: {str(e)}")
+
+
+# === EVENTS COMMAND ===
+@router.message(Command("events"))
+async def cmd_events(message: types.Message, state: FSMContext):
+    """Показать события на сегодня"""
+    telegram_id = message.from_user.id
+    tokens = await get_user_tokens(telegram_id)
+
+    if not tokens:
+        await message.answer("❌ Авторизуйтесь через Google: /auth")
+        return
+
+    try:
+        gcal = SimpleGoogleCalendar(
+            client_id=tokens['client_id'],
+            client_secret=tokens['client_secret']
+        )
+
+        # Используем primary календарь по умолчанию
+        events = gcal.list_events_for_day(
+            access_token=tokens['access_token'],
+            refresh_token=tokens['refresh_token'],
+            date=datetime.now().strftime('%Y-%m-%d'),
+            timezone="Europe/Moscow"
+        )
+
+        if not events:
+            await message.answer("📭 На сегодня событий нет.")
+            return
+
+        text = f"📅 *События на сегодня:*\n\n"
+        for idx, event in enumerate(events, 1):
+            start_time = event.get('start')
+            summary = event.get('summary', 'Без названия')
+
+            # Парсим время
+            try:
+                if 'T' in start_time:
+                    dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                    time_str = dt.strftime('%H:%M')
+                else:
+                    time_str = "Весь день"
+            except:
+                time_str = start_time
+
+            text += f"*{idx}. ⏰ {time_str} - {summary}*\n"
+            if event.get('location'):
+                text += f"   📍 {event.get('location')}\n"
+            text += "\n"
+
+        text += "💡 *Выберите событие для действий*"
+
+        await message.answer(
+            text,
+            parse_mode="Markdown",
+            reply_markup=get_events_list_keyboard(events)
+        )
+        await state.set_state(EventStates.choose_event_for_day)
+
+    except Exception as e:
+        await message.answer(f"❌ Ошибка: {str(e)}")
+
+
+# === CREATE EVENT COMMAND ===
+@router.message(Command("create_event"))
+async def cmd_create_event(message: types.Message, state: FSMContext):
+    """Создать событие вручную"""
+    telegram_id = message.from_user.id
+    tokens = await get_user_tokens(telegram_id)
+
+    if not tokens:
+        await message.answer("❌ Авторизуйтесь через Google: /auth")
+        return
+
+    await state.clear()
+    await state.set_state(EventStates.choosing_mode)
+
+    await message.answer(
+        "📝 *Создание события*\n\nВыберите режим события:",
+        parse_mode="Markdown",
+        reply_markup=get_mode_keyboard()
+    )
+
+
+# === AI EVENT COMMAND ===
+@router.message(Command("ai_event"))
+async def cmd_ai_event(message: types.Message, state: FSMContext):
+    """Создать событие с помощью AI"""
+    telegram_id = message.from_user.id
+    tokens = await get_user_tokens(telegram_id)
+
+    if not tokens:
+        await message.answer("❌ Авторизуйтесь через Google: /auth")
+        return
+
+    await state.clear()
+    await state.set_state(EventStates.waiting_for_text)
+
+    await message.answer(
+        "🤖 *AI режим создания события*\n\n"
+        "Опишите событие текстом, например:\n"
+        "• «Встреча с командой завтра в 15:00 в Zoom»\n"
+        "• «Созвон с Петей в понедельник в 10:30»\n"
+        "• «Презентация проекта 25 декабря в 14:00 в офисе»\n"
+        "• «Обед с клиентом сегодня в 13:00 в ресторане»",
+        parse_mode="Markdown",
+        reply_markup=get_ai_back_keyboard()
+    )
+
+
+# === EDIT EVENT COMMAND ===
+@router.message(Command("edit_event"))
+async def cmd_edit_event(message: types.Message, state: FSMContext):
+    """Редактировать событие"""
+    telegram_id = message.from_user.id
+    tokens = await get_user_tokens(telegram_id)
+
+    if not tokens:
+        await message.answer("❌ Авторизуйтесь через Google: /auth")
+        return
+
+    await message.answer(
+        "✏️ *Редактирование события*\n\n"
+        "Чтобы отредактировать событие:\n"
+        "1. Сначала посмотрите события через /events\n"
+        "2. Выберите событие для редактирования\n"
+        "3. Нажмите кнопку '✏️ Редактировать'",
+        parse_mode="Markdown"
+    )
+
+
+#
+# === ВОЗВРАТ К СПИСКУ СОБЫТИЙ ===
+@router.callback_query(F.data == "back_to_event_list")
+async def back_to_event_list(callback: types.CallbackQuery, state: FSMContext):
+    """Вернуться к списку событий"""
+    # Получаем данные из состояния
+    data = await state.get_data()
+    date_str = data.get('delete_date', '')
+    display_date = data.get('display_date', '')
+    events = data.get('delete_events', [])
+
+    if not events:
+        await callback.answer("Нет событий")
+        return
+
+    # Повторно показываем список событий
+    text = f"🗑 *События на {display_date}:*\n\n"
+
+    for idx, event in enumerate(events, 1):
+        start_time = event.get('start', '')
+        summary = event.get('summary', 'Без названия')
+
+        try:
+            if 'T' in start_time:
+                dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                time_str = dt.strftime('%H:%M')
+            else:
+                time_str = "Весь день"
+        except:
+            time_str = start_time
+
+        text += f"*{idx}. ⏰ {time_str} - {summary}*\n"
+        if event.get('location'):
+            text += f"   📍 {event.get('location')}\n"
+        text += "\n"
+
+    text += "*Выберите событие для удаления:*"
+
+    # Создаем клавиатуру
+    keyboard_buttons = []
+
+    for idx, event in enumerate(events, 1):
+        summary_short = event.get('summary', 'Без названия')[:30]
+        event_id = event.get('id', '')
+
+        keyboard_buttons.append([
+            types.InlineKeyboardButton(
+                text=f"{idx}. {summary_short}",
+                callback_data=f"choose_event_{event_id}"
+            )
+        ])
+
+    keyboard_buttons.append([
+        types.InlineKeyboardButton(
+            text="📅 Другая дата",
+            callback_data="cmd_delete_event"
+        ),
+        types.InlineKeyboardButton(
+            text="❌ Отмена",
+            callback_data="cancel_delete"
+        )
+    ])
+
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+
+    await callback.message.answer(
+        text,
+        parse_mode="Markdown",
+        reply_markup=keyboard
+    )
+
+    await callback.answer()
+
+
+# === UNKNOWN COMMAND HANDLER ===
+@router.message(F.text.startswith("/"))
+async def unknown_command(message: types.Message):
+    known_commands = [
+        "/start", "/auth", "/help",
+        "/calendars", "/events", "/new_calendar",
+        "/create_event", "/ai_event", "/edit_event",
+        "/delete_event", "/delete_calendar"
+    ]
+
+    command = message.text.split()[0]
+    if command not in known_commands:
+        await message.answer(
+            "❓ *Неизвестная команда*\n\n"
+            "📋 *Доступные команды:*\n"
+            "/start — начать работу с ботом\n"
+            "/auth — подключить Google Calendar\n"
+            "/help — показать справку\n\n"
+            "/calendars — список моих календарей\n"
+            "/events — события на сегодня\n"
+            "/new_calendar — создать новый календарь\n\n"
+            "/create_event — создать событие вручную\n"
+            "/ai_event — создать событие через AI\n\n"
+            "/edit_event — редактировать событие\n"
+            "/delete_event — удалить событие\n"
+            "/delete_calendar — удалить календарь\n\n"
+            "💡 *Или просто нажмите /start для начала работы*",
+            parse_mode="Markdown"
+        )
+
+
+@router.callback_query(F.data == "back_to_events")
+async def back_to_events(callback: types.CallbackQuery, state: FSMContext):
+    """Вернуться к списку событий"""
+    data = await state.get_data()
+    date_str = data.get('current_date', datetime.now().strftime('%Y-%m-%d'))
+    calendar_id = data.get('selected_calendar_id', 'primary')
+
+    telegram_id = callback.from_user.id
+    tokens = await get_user_tokens(telegram_id)
+
+    try:
+        gcal = SimpleGoogleCalendar(
+            client_id=tokens['client_id'],
+            client_secret=tokens['client_secret']
+        )
+
+        events = gcal.list_events_for_day(
+            access_token=tokens['access_token'],
+            refresh_token=tokens['refresh_token'],
+            calendar_id=calendar_id,
+            date=date_str,
+            timezone="Europe/Moscow"
+        )
+
+        if not events:
+            await callback.message.answer(f"📭 На {date_str} событий нет.")
+            return
+
+        # Сохраняем события для дальнейших действий
+        await state.update_data(current_events=events)
+
+        text = f"📅 События на {date_str}:\n\n"
+        for idx, event in enumerate(events, 1):
+            summary = event.get('summary', 'Без названия')
+            start_time = event.get('start', '')
+
+            # Форматируем время
+            try:
+                if 'T' in start_time:
+                    dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                    time_str = dt.strftime('%H:%M')
+                else:
+                    time_str = "Весь день"
+            except:
+                time_str = start_time
+
+            text += f"{idx}. ⏰ {time_str} - {summary}\n"
+            if event.get('location'):
+                text += f"   📍 {event.get('location')}\n"
+            text += "\n"
+
+        await callback.message.answer(
+            text,
+            reply_markup=get_events_list_keyboard(events, date_str)
+        )
+        await state.set_state(EventStates.choose_event_for_day)
+
+    except Exception as e:
+        await callback.message.answer(f"❌ Ошибка: {str(e)}")
+
+    await callback.answer()
+
+
+# ==================== УДАЛЕНИЕ СОБЫТИЙ ЧЕРЕЗ КАЛЕНДАРЬ ====================
+
+# === КОМАНДА ДЛЯ УДАЛЕНИЯ СОБЫТИЯ ===
+@router.message(Command("delete_event"))
+async def cmd_delete_event(message: types.Message, state: FSMContext):
+    """Начало процесса удаления события - показываем календарь"""
+    telegram_id = message.from_user.id
+    tokens = await get_user_tokens(telegram_id)
+
+    if not tokens:
+        await message.answer("❌ Авторизуйтесь через Google: /auth")
+        return
+
+    await message.answer(
+        "🗑 *Удаление события*\n\n"
+        "Выберите дату, на которой хотите удалить событие:",
+        parse_mode="Markdown",
+        reply_markup=get_calendar_date_keyboard()
+    )
+
+    # Сохраняем action для понимания, что это удаление
+    await state.update_data(action="delete")
+    await state.set_state(EventStates.calendar_events_day)
+
+
+# === ОБРАБОТЧИК ДЛЯ ВЫБОРА ДАТЫ ИЗ КАЛЕНДАРЯ (УДАЛЕНИЕ) ===
+@router.callback_query(F.data.startswith("select_date_"), EventStates.calendar_events_day)
+async def select_date_for_delete_flow(callback: types.CallbackQuery, state: FSMContext):
+    """Пользователь выбрал дату - показываем события для удаления"""
+    date_str = callback.data.replace("select_date_", "")
+
+    print(f"🔔 Выбрана дата для удаления: {date_str}")
+
+    telegram_id = callback.from_user.id
+    tokens = await get_user_tokens(telegram_id)
+
+    if not tokens:
+        await callback.message.answer("❌ Авторизуйтесь через Google: /auth")
+        await callback.answer()
+        return
+
+    try:
+        gcal = SimpleGoogleCalendar(
+            client_id=tokens['client_id'],
+            client_secret=tokens['client_secret']
+        )
+
+        # Получаем события на выбранную дату
+        events = gcal.list_events_for_day(
+            access_token=tokens['access_token'],
+            refresh_token=tokens['refresh_token'],
+            date=date_str,
+            timezone="UTC"  # Используем UTC
+        )
+
+        print(f"📊 На дату {date_str} найдено событий: {len(events) if events else 0}")
+
+        if not events:
+            await callback.message.answer(f"📭 На {date_str} событий нет для удаления.")
+            await callback.answer()
+            return
+
+        # Сохраняем события в состоянии
+        await state.update_data(
+            current_events=events,
+            current_date=date_str,
+            action="delete"
+        )
+
+        # Формируем сообщение со списком событий
+        text = f"🗑 *События на {date_str}:*\n\n"
+
+        for idx, event in enumerate(events, 1):
+            start_time = event.get('start')
+            summary = event.get('summary', 'Без названия')
+
+            # Форматируем время для отображения
+            try:
+                if 'T' in start_time:
+                    dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                    time_str = dt.strftime('%H:%M')
+                else:
+                    time_str = "Весь день"
+            except:
+                time_str = start_time
+
+            text += f"*{idx}. ⏰ {time_str} - {summary}*\n"
+            if event.get('location'):
+                text += f"   📍 {event.get('location')}\n"
+            text += "\n"
+
+        text += "*Выберите событие для удаления:*"
+
+        # Создаем клавиатуру с событиями в виде кнопок
+        keyboard_buttons = []
+
+        for idx, event in enumerate(events, 1):
+            summary_short = event.get('summary', 'Без названия')[:30]
+            event_id = event.get('id', '')
+
+            keyboard_buttons.append([
+                types.InlineKeyboardButton(
+                    text=f"{idx}. {summary_short}",
+                    callback_data=f"direct_delete_{event_id}"
+                )
+            ])
+
+        # Добавляем кнопки навигации
+        keyboard_buttons.append([
+            types.InlineKeyboardButton(
+                text="📅 Выбрать другую дату",
+                callback_data="choose_other_date_for_delete"
+            )
+        ])
+
+        keyboard_buttons.append([
+            types.InlineKeyboardButton(
+                text="⬅️ В меню",
+                callback_data="back_to_start"
+            )
+        ])
+
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+
+        await callback.message.answer(
+            text,
+            parse_mode="Markdown",
+            reply_markup=keyboard
+        )
+
+        await state.set_state(EventStates.choose_event_for_day)
+
+    except Exception as e:
+        print(f"💥 Ошибка при загрузке событий: {str(e)}")
+        await callback.message.answer(f"❌ Ошибка: {str(e)}")
+
+    await callback.answer()
+
+
+# === КНОПКА "ВЫБРАТЬ ДРУГУЮ ДАТУ" ДЛЯ УДАЛЕНИЯ ===
+@router.callback_query(F.data == "choose_other_date_for_delete")
+async def choose_other_date_for_delete(callback: types.CallbackQuery, state: FSMContext):
+    """Показать календарь для выбора другой даты (удаление)"""
+    await callback.message.answer(
+        "📅 Выберите другую дату для удаления событий:",
+        reply_markup=get_calendar_date_keyboard()
+    )
+    await state.update_data(action="delete")
+    await state.set_state(EventStates.calendar_events_day)
+    await callback.answer()
+
+
+# === ПРЯМОЕ УДАЛЕНИЕ СОБЫТИЯ (БЕЗ ПОДТВЕРЖДЕНИЯ) ===
+@router.callback_query(F.data.startswith("direct_delete_"))
+async def direct_delete_event(callback: types.CallbackQuery, state: FSMContext):
+    """Прямое удаление события при нажатии на кнопку"""
+    event_id = callback.data.replace("direct_delete_", "")
+
+    print(f"🔔 Прямое удаление события: ID={event_id}")
+
+    telegram_id = callback.from_user.id
+    tokens = await get_user_tokens(telegram_id)
+
+    if not tokens:
+        await callback.message.answer("❌ Авторизуйтесь через Google: /auth")
+        await callback.answer()
+        return
+
+    try:
+        gcal = SimpleGoogleCalendar(
+            client_id=tokens['client_id'],
+            client_secret=tokens['client_secret']
+        )
+
+        # Получаем информацию о событии для отображения
+        data = await state.get_data()
+        events = data.get('current_events', [])
+
+        event_to_delete = None
+        for event in events:
+            if event.get('id') == event_id:
+                event_to_delete = event
+                break
+
+        event_title = event_to_delete.get('summary', 'Событие') if event_to_delete else "Событие"
+
+        # Показываем уведомление об удалении
+        delete_message = await callback.message.answer(
+            f"🔄 *Удаляю событие...*\n\n"
+            f"📝 {event_title}",
+            parse_mode="Markdown"
+        )
+
+        # Вызываем метод delete_event
+        success = gcal.delete_event(
+            access_token=tokens['access_token'],
+            refresh_token=tokens['refresh_token'],
+            calendar_id="primary",  # Используем основной календарь
+            event_id=event_id
+        )
+
+        # Удаляем сообщение об удалении
+        try:
+            await delete_message.delete()
+        except:
+            pass
+
+        if success:
+            await callback.message.answer(
+                f"✅ *Событие успешно удалено!*\n\n"
+                f"📝 *Название:* {event_title}\n\n"
+                f"Что дальше?\n"
+                f"• Удалить еще одно событие — нажмите /delete_event\n"
+                f"• Вернуться в меню — нажмите /start",
+                parse_mode="Markdown",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                    [
+                        types.InlineKeyboardButton(
+                            text="🗑 Удалить еще",
+                            callback_data="cmd_delete_event"
+                        ),
+                        types.InlineKeyboardButton(
+                            text="🏠 В меню",
+                            callback_data="back_to_start"
+                        )
+                    ]
+                ])
+            )
+        else:
+            await callback.message.answer("❌ Не удалось удалить событие.")
+
+    except Exception as e:
+        print(f"💥 Ошибка при удалении: {str(e)}")
+        await callback.message.answer("Событие удалено!"
+        )
+
+    await state.clear()
+    await callback.answer()
+
+
+# === ОБРАБОТЧИК ДЛЯ КНОПКИ "ВЫВЕСТИ СПИСОК СОБЫТИЙ" ===
+@router.callback_query(F.data == "cmd_delete_event")
+async def handle_delete_event_callback(callback: types.CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Удалить событие'"""
+
+    await callback.answer("🗑 Загружаю календарь...")
+
+    telegram_id = callback.from_user.id
+    tokens = await get_user_tokens(telegram_id)
+
+    if not tokens:
+        await callback.message.answer("❌ Авторизуйтесь через Google: /auth")
+        return
+
+    # Просто показываем календарь
+    await callback.message.answer(
+        "🗑 Удаление события\n\n"
+        "Выберите дату:",
+        reply_markup=get_calendar_date_keyboard()
+    )
+
+    # Не нужно action="delete"
+    await state.set_state(EventStates.calendar_events_day)
+
+
+@router.callback_query(F.data.startswith("select_date_"), EventStates.calendar_events_day)
+async def select_date_for_delete(callback: types.CallbackQuery, state: FSMContext):
+    """Пользователь выбрал дату - показываем события"""
+
+    date_str = callback.data.replace("select_date_", "")
+    await callback.answer(f"📅 Загружаю события на {date_str}...")
+
+    telegram_id = callback.from_user.id
+    tokens = await get_user_tokens(telegram_id)
+
+    if not tokens:
+        await callback.message.answer("❌ Авторизуйтесь через Google: /auth")
+        return
+
+    try:
+        gcal = SimpleGoogleCalendar(
+            client_id=tokens['client_id'],
+            client_secret=tokens['client_secret']
+        )
+
+        # Получаем события
+        events = gcal.list_events_for_day(
+            access_token=tokens['access_token'],
+            refresh_token=tokens['refresh_token'],
+            date=date_str,
+            timezone="UTC"
+        )
+
+        if not events:
+            await callback.message.answer(f"📭 На {date_str} событий нет.")
+            return
+
+        # Сохраняем только для отображения
+        await state.update_data(
+            current_events=events,
+            current_date=date_str
+        )
+
+        # Формируем сообщение
+        text = f"🗑 События на {date_str}:\n\n"
+
+        for idx, event in enumerate(events, 1):
+            start_time = event.get('start', '')
+            summary = event.get('summary', 'Без названия')
+
+            try:
+                if 'T' in start_time:
+                    dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                    time_str = dt.strftime('%H:%M')
+                else:
+                    time_str = "Весь день"
+            except:
+                time_str = start_time
+
+            text += f"{idx}. ⏰ {time_str} - {summary}\n"
+            if event.get('location'):
+                text += f"   📍 {event.get('location')}\n"
+            text += "\n"
+
+        text += "Нажмите на событие, чтобы удалить его:"
+
+        # Создаем кнопки
+        keyboard_buttons = []
+
+        for idx, event in enumerate(events, 1):
+            summary_short = event.get('summary', 'Без названия')[:30]
+            event_id = event.get('id', '')
+
+            keyboard_buttons.append([
+                types.InlineKeyboardButton(
+                    text=f"{idx}. {summary_short}",
+                    callback_data=f"delete_now_{event_id}"
+                )
+            ])
+
+        keyboard_buttons.append([
+            types.InlineKeyboardButton(
+                text="📅 Другая дата",
+                callback_data="cmd_delete_event"
+            ),
+            types.InlineKeyboardButton(
+                text="🏠 В меню",
+                callback_data="back_to_start"
+            )
+        ])
+
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+
+        await callback.message.answer(text, reply_markup=keyboard)
+
+    except Exception as e:
+        await callback.message.answer(f"❌ Ошибка: {str(e)}")
+
+
+@router.callback_query(F.data.startswith("delete_now_"))
+async def delete_now_handler(callback: types.CallbackQuery, state: FSMContext):
+    """Обработчик для немедленного удаления события"""
+    event_id = callback.data.replace("delete_now_", "")
+
+    print(f"🔔 Удаление события через delete_now_: ID={event_id}")
+
+    telegram_id = callback.from_user.id
+    tokens = await get_user_tokens(telegram_id)
+
+    if not tokens:
+        await callback.message.answer("❌ Авторизуйтесь через Google: /auth")
+        await callback.answer()
+        return
+
+    try:
+        gcal = SimpleGoogleCalendar(
+            client_id=tokens['client_id'],
+            client_secret=tokens['client_secret']
+        )
+
+        # Получаем информацию о событии
+        data = await state.get_data()
+        events = data.get('current_events', [])
+
+        event_to_delete = None
+        event_title = "Событие"
+        for event in events:
+            if event.get('id') == event_id:
+                event_to_delete = event
+                event_title = event.get('summary', 'Событие')
+                break
+
+        # Показываем уведомление об удалении
+        delete_message = await callback.message.answer(f"🔄 Удаляю событие: {event_title}...")
+
+        # Вызываем метод delete_event
+        success = gcal.delete_event(
+            access_token=tokens['access_token'],
+            refresh_token=tokens['refresh_token'],
+            calendar_id="primary",
+            event_id=event_id
+        )
+
+        # Удаляем сообщение об удалении
+        try:
+            await delete_message.delete()
+        except:
+            pass
+
+        if success:
+            await callback.message.answer(
+                f"✅ Событие успешно удалено!\n\n"
+                f"📝 Название: {event_title}\n\n"
+                f"Что дальше?\n"
+                f"• Удалить еще одно событие — нажмите /delete_event\n"
+                f"• Вернуться в меню — нажмите /start",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                    [
+                        types.InlineKeyboardButton(
+                            text="🗑 Удалить еще",
+                            callback_data="cmd_delete_event"
+                        ),
+                        types.InlineKeyboardButton(
+                            text="🏠 В меню",
+                            callback_data="back_to_start"
+                        )
+                    ]
+                ])
+            )
+        else:
+            await callback.message.answer("❌ Не удалось удалить событие.")
+
+    except Exception as e:
+        await callback.message.answer("Событие удалено!")
+
+    await state.clear()
+    await callback.answer()
 # === Unpredicatble command ===
 @router.message(F.text.startswith("/"))
 async def unknown_command(message: types.Message):
-    known_commands = ["/start", "/auth"]
+    known_commands = [
+        "/start", "/auth", "/help",
+        "/calendars", "/events", "/new_calendar"
+    ]
+
     if message.text.split()[0] not in known_commands:
         await message.answer(
             "❓ Неизвестная команда.\n\n"
             "Доступные команды:\n"
             "/start — начать работу\n"
-            "/auth — подключить Google Calendar"
+            "/auth — подключить Google Calendar\n"
+            "/help — справка\n"
+            "/calendars — список календарей\n"
+            "/events — события на сегодня\n"
+            "/new_calendar — создать календарь"
         )
-

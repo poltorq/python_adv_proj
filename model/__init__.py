@@ -11,7 +11,7 @@ Model Package — NER модель для извлечения событий и
     print(data)
 """
 
-from .dataclasses import (
+from model.dataclasses import (
     NEREntity,
     EventSlots,
     EventData,
@@ -19,14 +19,14 @@ from .dataclasses import (
     EntityType,
 )
 
-from .postprocessing import (
+from model.postprocessing import (
     NERPostprocessor,
     PostprocessorConfig,
     ValidationResult,
     format_event_for_display,
 )
 
-from .parser import (
+from model.parser import (
     DateTimeParser,
     ParserConfig,
     parse_date,
@@ -34,14 +34,14 @@ from .parser import (
     parse_datetime,
 )
 
-from .evaluator import (
+from model.evaluator import (
     NERModel,
     EvaluatorConfig,
     get_model,
     predict,
 )
 
-from .pipeline import (
+from model.pipeline import (
     NERPipeline,
     PipelineConfig,
     get_pipeline,

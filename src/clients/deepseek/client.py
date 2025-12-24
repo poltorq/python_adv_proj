@@ -50,13 +50,6 @@ class Usage:
     total_tokens: int  # Всего токенов (prompt + completion)
 
 
-@dataclass
-class DeepSeekConfig:
-    api_key: str
-    base_url: str = "https://openrouter.ai/api/v1"
-    model: str = "tngtech/deepseek-r1t2-chimera:free"
-
-
 class DeepSeekClient:
     """
     Клиент для работы с DeepSeek API через OpenAI SDK.
@@ -88,12 +81,9 @@ class DeepSeekClient:
             base_url=config.deepseek.base_url,
             timeout=30,  # Таймаут запроса в секундах
             max_retries=3,  # Максимальное количество попыток при ошибках
-            default_headers={
-                "HTTP-Referer": "http://localhost",   # или URL твоего проекта
-                "X-Title": "python-adv-proj",          # любое имя приложения
-            }
         )
         self.model = config.deepseek.model  # Модель DeepSeek для использования
+        self.validate_connection()  # Проверяем подключение к API
 
     def validate_connection(self) -> None:
         """

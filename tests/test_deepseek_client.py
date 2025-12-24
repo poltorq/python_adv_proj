@@ -170,3 +170,18 @@ def test_validate_connection_raises_runtime_error(mock_openai):
         client.validate_connection()
 
 
+load_dotenv()
+
+
+def test_if_it_actually_works():
+    """No joking: real test if all this
+    code works & produces answers"""
+    client = DeepSeekClient()
+
+    response = client.client.chat.completions.create(
+        model=client.model,
+        messages=[{"role": "user", "content": "Hello, DeepSeek!"}],
+        max_tokens=1,
+    )
+
+    print(response)

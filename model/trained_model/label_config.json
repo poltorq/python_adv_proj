@@ -1,0 +1,47 @@
+{
+  "label_list": [
+    "O",
+    "B-DATE",
+    "I-DATE",
+    "B-TIME",
+    "I-TIME",
+    "B-LOC",
+    "I-LOC",
+    "B-TITLE",
+    "I-TITLE",
+    "B-USER",
+    "I-USER",
+    "B-URL",
+    "I-URL"
+  ],
+  "label2id": {
+    "O": 0,
+    "B-DATE": 1,
+    "I-DATE": 2,
+    "B-TIME": 3,
+    "I-TIME": 4,
+    "B-LOC": 5,
+    "I-LOC": 6,
+    "B-TITLE": 7,
+    "I-TITLE": 8,
+    "B-USER": 9,
+    "I-USER": 10,
+    "B-URL": 11,
+    "I-URL": 12
+  },
+  "id2label": {
+    "0": "O",
+    "1": "B-DATE",
+    "2": "I-DATE",
+    "3": "B-TIME",
+    "4": "I-TIME",
+    "5": "B-LOC",
+    "6": "I-LOC",
+    "7": "B-TITLE",
+    "8": "I-TITLE",
+    "9": "B-USER",
+    "10": "I-USER",
+    "11": "B-URL",
+    "12": "I-URL"
+  }
+}

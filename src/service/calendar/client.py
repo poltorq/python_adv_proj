@@ -135,21 +135,57 @@ class SimpleGoogleCalendar:
 
     # ==================== 3. ИЗМЕНИТЬ СОСТОЯНИЕ СОБЫТИЯ ====================
 
-    def update_event_status(
+    def update_event(
             self,
             access_token: str,
             calendar_id: str,
             event_id: str,
-            new_status: str,
-            refresh_token: Optional[str] = None
+            **updates
     ) -> Dict[str, Any]:
         """
-        Изменить статус события (confirmed, tentative, cancelled)
+        Изменить любое поле события:
+        - summary (название)
+        - description (описание)
+        - start/end (время)
+        - location (локация)
+        - attendees (участники)
+        - recurrence (повторение)
+        - и любые другие поля
 
-        Пример:
-            update_event_status(access_token, 'primary', 'event_123', 'cancelled')
+        Примеры использования:
+
+        1. Изменить название и время:
+            update_event(
+                access_token, 'primary', 'event_123',
+                summary='Новое название встречи',
+                start={'dateTime': '2024-12-25T10:00:00+03:00'},
+                end={'dateTime': '2024-12-25T11:00:00+03:00'}
+            )
+
+        2. Изменить локацию и добавить описание:
+            update_event(
+                access_token, 'primary', 'event_123',
+                location='Новый офис, этаж 5',
+                description='Обновленная встреча с командой'
+            )
+
+        3. Изменить участников:
+            update_event(
+                access_token, 'primary', 'event_123',
+                attendees=[
+                    {'email': 'user1@example.com'},
+                    {'email': 'user2@example.com'}
+                ]
+            )
+
+        4. Изменить время на целый день:
+            update_event(
+                access_token, 'primary', 'event_123',
+                start={'date': '2024-12-25'},
+                end={'date': '2024-12-26'}
+            )
         """
-        service = self._create_service(access_token, refresh_token)
+        service = self._create_service(access_token, updates.get('refresh_token'))
 
         # Получаем текущее событие
         event = service.events().get(
@@ -157,8 +193,18 @@ class SimpleGoogleCalendar:
             eventId=event_id
         ).execute()
 
-        # Обновляем статус
-        event['status'] = new_status
+        # Применяем все обновления
+        for key, value in updates.items():
+            if key == 'refresh_token':
+                continue  # Пропускаем refresh_token, это не поле события
+
+            if value is None:
+                # Удаляем поле если передано None
+                if key in event:
+                    del event[key]
+            else:
+                # Обновляем поле
+                event[key] = value
 
         # Сохраняем изменения
         updated_event = service.events().update(
@@ -170,7 +216,10 @@ class SimpleGoogleCalendar:
         return {
             'id': updated_event['id'],
             'summary': updated_event.get('summary'),
-            'status': updated_event.get('status'),
+            'start': updated_event['start'],
+            'end': updated_event['end'],
+            'location': updated_event.get('location'),
+            'attendees': len(updated_event.get('attendees', [])),
             'updated': updated_event.get('updated')
         }
 

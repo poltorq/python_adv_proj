@@ -53,36 +53,36 @@ from src.fallback.fallback_logic import FallbackManager, MockModel
 #     assert len(response.choices) > 0
 #     assert response.choices[0].message.content.strip() != ""
 
-@pytest.mark.integration
-def test_if_it_actually_works():
-    """No joking: real test if all this
-    code works & produces answers"""
-    config = AppConfig(
-        bot={
-            "token": os.getenv("TELEGRAM_TOKEN"),
-            "admins": [],
-            "use_webhook": False,
-        },
-        deepseek=DeepSeekConfig(
-            api_key=os.getenv("DEEPSEEK_API_KEY"),
-            #base_url="https://openrouter.ai/api/v1",
-            #model="tngtech/deepseek-r1t-chimera:free",
-            base_url="https://openrouter.ai/api/v1",
-            model="nex-agi/deepseek-v3.1-nex-n1:free"
-        ),
-        debug=True,
-        log_level="INFO",
-    )
-    client = DeepSeekClient(config)
+# @pytest.mark.integration
+# def test_if_it_actually_works():
+#     """No joking: real test if all this
+#     code works & produces answers"""
+#     config = AppConfig(
+#         bot={
+#             "token": os.getenv("TELEGRAM_TOKEN"),
+#             "admins": [],
+#             "use_webhook": False,
+#         },
+#         deepseek=DeepSeekConfig(
+#             api_key=os.getenv("DEEPSEEK_API_KEY"),
+#             #base_url="https://openrouter.ai/api/v1",
+#             #model="tngtech/deepseek-r1t-chimera:free",
+#             base_url="https://openrouter.ai/api/v1",
+#             model="nex-agi/deepseek-v3.1-nex-n1:free"
+#         ),
+#         debug=True,
+#         log_level="INFO",
+#     )
+#     client = DeepSeekClient(config)
 
-    response = client.client.chat.completions.create(
-        model=client.model,
-        messages=[{"role": "user", "content": "Hello, DeepSeek!"}],
-        max_tokens=1,
-    )
+#     response = client.client.chat.completions.create(
+#         model=client.model,
+#         messages=[{"role": "user", "content": "Hello, DeepSeek!"}],
+#         max_tokens=1,
+#     )
 
-    print(response)
-    assert 1 != 1
+#     print(response)
+#     assert 1 != 1
 
 
 

@@ -8,17 +8,7 @@ from aiogram.types import (ReplyKeyboardMarkup,
                            InlineKeyboardButton)
 
 
-def get_main_keyboard() -> ReplyKeyboardMarkup:
-    """Основная клавиатура"""
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="👋 Привет"),
-             KeyboardButton(text="📅 Дата")],
-            [KeyboardButton(text="🆘 Помощь"),
-             KeyboardButton(text="🎲 Случайное число")]
-        ],
-        resize_keyboard=True
-    )
+
 
 
 def get_inline_keyboard() -> InlineKeyboardMarkup:
@@ -44,16 +34,14 @@ def get_auth_keyboard(some_url: str) -> InlineKeyboardMarkup:
 
 
 def get_mode_keyboard() -> InlineKeyboardMarkup:
-    """Inline keyboard for choosing the mode"""
+    """Inline keyboard для выбора режима события"""
     keyboard = [
         [InlineKeyboardButton(text="Классический режим",
                               callback_data="mode_no_ai"),
          InlineKeyboardButton(text="AI режим",
-                              callback_data="mode_ai")]
+                              callback_data="mode_ai")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="back")]
     ]
-
-    keyboard.append([InlineKeyboardButton(text="⬅️ Назад",
-                                          callback_data="back")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 

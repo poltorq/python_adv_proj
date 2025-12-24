@@ -53,8 +53,8 @@ class Usage:
 @dataclass
 class DeepSeekConfig:
     api_key: str
-    base_url: str = "https://api.deepseek.com"
-    model: str = "default-model"
+    base_url: str = "https://openrouter.ai/api/v1"
+    model: str = "nex-agi/deepseek-v3.1-nex-n1:free"
 
 
 class DeepSeekClient:
@@ -91,10 +91,9 @@ class DeepSeekClient:
             default_headers={
                 "HTTP-Referer": "http://localhost",   # или URL твоего проекта
                 "X-Title": "python-adv-proj",          # любое имя приложения
-            },
+            }
         )
         self.model = config.deepseek.model  # Модель DeepSeek для использования
-        self.validate_connection()  # Проверяем подключение к API
 
     def validate_connection(self) -> None:
         """

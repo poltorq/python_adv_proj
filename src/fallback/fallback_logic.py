@@ -3,6 +3,9 @@ from datetime import datetime
 import random
 import os
 import src.clients.deepseek.client as deep_client
+from src.clients.deepseek.client import DeepSeekClient, DeepSeekConfig
+from src.config.config import AppConfig
+
 class BaseModel(ABC):
     @abstractmethod
     def generate(self, prompt: str, system_prompt: str | None = None) -> str:
@@ -95,16 +98,23 @@ class FallbackManager:
     '''
     def __init__(self, model: BaseModel):
         self.model = model
-        self.deepspeak_model = deep_client.DeepSeekClient(deep_client.AppConfig(
+        config = AppConfig(
             bot={
                 "token": os.getenv("TELEGRAM_TOKEN"),
                 "admins": [],
-                "use_webhook": False
+                "use_webhook": False,
             },
-            deepseek=deep_client.DeepSeekConfig(api_key=os.getenv("DEEPSEEK_API_KEY")),
+            deepseek=DeepSeekConfig(
+                api_key=os.getenv("DEEPSEEK_API_KEY"),
+                #base_url="https://openrouter.ai/api/v1",
+                #model="tngtech/deepseek-r1t-chimera:free",
+                base_url="https://openrouter.ai/api/v1",
+                model="nex-agi/deepseek-v3.1-nex-n1:free"
+            ),
             debug=True,
-            log_level="INFO"
-        ))
+            log_level="INFO",
+        )
+        self.deepspeak_model = DeepSeekClient(config)
 
     def run(self, request: deep_client.ChatRequest, prompt: deep_client.Message) -> dict[str, str]:
         # Ideal structure for validation

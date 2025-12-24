@@ -14,12 +14,11 @@ from src.keyboards.keyboards import (
     get_duration_keyboard,
     get_mode_keyboard,
     get_confirmation_keyboard,
+    get_add_another_event_keyboard,
+    get_ai_back_keyboard,
 )
 from src.service.calendar.client import SimpleGoogleCalendar
 from model import process_text, extract_event, format_event_for_display
-from src.fallback.fallback_logic import FallbackManager, is_valid_date
-import src.clients.deepseek.client as deep_client
-import json
 
 router = Router()
 
@@ -122,6 +121,39 @@ async def cmd_start(message: types.Message, state: FSMContext):
     )
 
 
+# ===Auth===
+@router.message(Command("auth"))
+async def cmd_auth(message: types.Message):
+    user = message.from_user
+    if not user:
+        return
+
+    telegram_id = user.id
+
+    tokens = await get_user_tokens(telegram_id)
+    if tokens:
+        await message.answer("✅ Google Calendar уже подключён.")
+        return
+
+    SERVER_URL = "http://turbomuza.ru"
+    auth_url = f"{SERVER_URL}/auth/google?user_id={telegram_id}&chat_id={message.chat.id}"
+
+    auth_button = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [types.InlineKeyboardButton(
+                text="🔐 Авторизоваться через Google",
+                url=auth_url
+            )]
+        ]
+    )
+
+    await message.answer(
+        "🔐 Для работы с Google Calendar требуется авторизация:",
+        reply_markup=auth_button
+    )
+
+
+
 # === ВЫБОР РЕЖИМА ===
 @router.message(F.text == "🛠 Выбор режима")
 async def choose_mode_text(message: types.Message, state: FSMContext):
@@ -133,7 +165,7 @@ async def choose_mode_text(message: types.Message, state: FSMContext):
 async def choose_mode(callback: types.CallbackQuery, state: FSMContext):
     mode = callback.data.split("_")[1]
     await state.update_data(mode=mode)
-    
+
     if mode == "ai":
         # AI режим — запрашиваем текст
         await callback.message.edit_text(
@@ -141,151 +173,73 @@ async def choose_mode(callback: types.CallbackQuery, state: FSMContext):
             "Опишите событие текстом, например:\n"
             "• «Встреча с командой завтра в 15:00 в Zoom»\n"
             "• «Созвон с Петей в понедельник в 10:30»\n"
-            "• «Презентация проекта 25 декабря в 14:00 в офисе»"
+            "• «Презентация проекта 25 декабря в 14:00 в офисе»",
+            reply_markup=get_ai_back_keyboard()
         )
         await state.set_state(EventStates.waiting_for_text)
     else:
         # Классический режим — переход к выбору даты
         await callback.message.edit_text("Выберите дату события:", reply_markup=get_calendar_keyboard())
         await state.set_state(EventStates.choosing_date)
-    
+
     await callback.answer()
 
 
 # === AI РЕЖИМ: ОБРАБОТКА ТЕКСТА ===
-def validate_event_response(response: dict) -> bool:
-    """Проверяет валидность ответа модели."""
-    if not response:
-        return False
-    title = response.get("title")
-    date_str = response.get("date")
-    return bool(title) and bool(date_str) and is_valid_date(date_str)
-
-
-def parse_deepseek_response(response_text: str) -> dict:
-    """Парсит JSON ответ от DeepSeek."""
-    try:
-        # Пытаемся найти JSON в ответе
-        # DeepSeek может вернуть текст с JSON внутри
-        import re
-        json_match = re.search(r'\{[^{}]*\}', response_text, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group())
-        return json.loads(response_text)
-    except (json.JSONDecodeError, AttributeError):
-        return {}
-
-
 @router.message(EventStates.waiting_for_text)
 async def process_ai_text(message: types.Message, state: FSMContext):
     user_text = message.text
     if not user_text:
         await message.answer("Пожалуйста, отправьте текстовое описание события.")
         return
-    
+
     await message.answer("🔄 Анализирую текст...")
-    
-    event_data = None
-    used_fallback = False
-    
-    # === ШАГ 1: Пробуем нашу модель ===
+
     try:
+        # Вызываем модель для извлечения события
         event_data = extract_event(user_text)
-        print(f"[AI] Ответ модели: {event_data}")
-    except Exception as e:
-        print(f"[AI] Ошибка модели: {e}")
-        event_data = {}
-    
-    # === ШАГ 2: Проверяем валидность ответа ===
-    if not validate_event_response(event_data):
-        print("[AI] Ответ модели невалиден, используем DeepSeek fallback...")
-        await message.answer("🔄 Уточняю с помощью DeepSeek...")
-        
-        # === ШАГ 3: Fallback на DeepSeek ===
-        try:
-            fallback = FallbackManager()
-            request = deep_client.ChatRequest(messages=[])
-            prompt = deep_client.Message(role="user", content=user_text)
-            
-            deepseek_response = fallback.run(request, prompt)
-            print(f"[AI] Ответ DeepSeek: {deepseek_response}")
-            
-            # Парсим ответ DeepSeek
-            if isinstance(deepseek_response, str):
-                parsed = parse_deepseek_response(deepseek_response)
-            else:
-                parsed = deepseek_response
-            
-            if parsed:
-                # Конвертируем формат DeepSeek в наш формат
-                event_data = {
-                    "title": parsed.get("title", "Событие"),
-                    "date": parsed.get("date"),
-                    "time": parsed.get("time"),
-                    "datetime": None,
-                    "location": parsed.get("loc"),
-                    "participants": [parsed.get("user")] if parsed.get("user") else [],
-                    "url": parsed.get("url"),
-                }
-                # Формируем datetime
-                if event_data["date"] and event_data["time"]:
-                    event_data["datetime"] = f"{event_data['date']}T{event_data['time']}"
-                elif event_data["date"]:
-                    event_data["datetime"] = f"{event_data['date']}T12:00:00"
-                
-                used_fallback = True
-                
-        except Exception as e:
-            print(f"[AI] Ошибка DeepSeek fallback: {e}")
-    
-    # === ШАГ 4: Проверяем итоговый результат ===
-    if not event_data or not event_data.get("datetime"):
-        await message.answer(
-            "❌ Не удалось распознать событие.\n\n"
-            "Попробуйте описать событие иначе, например:\n"
-            "• «Встреча завтра в 15:00»\n"
-            "• «Созвон 25 декабря в 10:30»\n\n"
-            "Или используйте классический режим."
+
+        # Сохраняем данные в состоянии
+        await state.update_data(
+            ai_event=event_data,
+            original_text=user_text
         )
-        return
-    
-    # Сохраняем данные в состоянии
-    await state.update_data(
-        ai_event=event_data,
-        original_text=user_text,
-        used_fallback=used_fallback
-    )
-    
-    # Формируем сообщение с результатом
-    title = event_data.get('title', 'Событие')
-    event_datetime = event_data.get('datetime')
-    location = event_data.get('location')
-    participants = event_data.get('participants', [])
-    
-    result_text = f"{'🤖' if not used_fallback else '🔮'} Распознано событие"
-    if used_fallback:
-        result_text += " (DeepSeek)"
-    result_text += ":\n\n"
-    result_text += f"📝 Название: {title}\n"
-    
-    if event_datetime:
-        try:
-            dt = datetime.fromisoformat(event_datetime)
-            result_text += f"📅 Дата: {dt.strftime('%d.%m.%Y')}\n"
-            result_text += f"🕐 Время: {dt.strftime('%H:%M')}\n"
-        except:
-            result_text += f"📅 Дата/время: {event_datetime}\n"
-    
-    if location:
-        result_text += f"📍 Место: {location}\n"
-    
-    if participants and any(participants):
-        result_text += f"👥 Участники: {', '.join(filter(None, participants))}\n"
-    
-    result_text += "\n✅ Создать это событие в календаре?"
-    
-    await message.answer(result_text, reply_markup=get_confirmation_keyboard())
-    await state.set_state(EventStates.ai_confirmation)
+
+        # Формируем сообщение с результатом
+        title = event_data.get('title', 'Событие')
+        event_datetime = event_data.get('datetime')
+        location = event_data.get('location')
+        participants = event_data.get('participants', [])
+
+        result_text = f"🤖 Распознано событие:\n\n"
+        result_text += f"📝 Название: {title}\n"
+
+        if event_datetime:
+            # Парсим datetime и форматируем красиво
+            try:
+                dt = datetime.fromisoformat(event_datetime)
+                result_text += f"📅 Дата: {dt.strftime('%d.%m.%Y')}\n"
+                result_text += f"🕐 Время: {dt.strftime('%H:%M')}\n"
+            except:
+                result_text += f"📅 Дата/время: {event_datetime}\n"
+
+        if location:
+            result_text += f"📍 Место: {location}\n"
+
+        if participants:
+            result_text += f"👥 Участники: {', '.join(participants)}\n"
+
+        result_text += "\n✅ Создать это событие в календаре?"
+
+        await message.answer(result_text, reply_markup=get_confirmation_keyboard())
+        await state.set_state(EventStates.ai_confirmation)
+
+    except Exception as e:
+        await message.answer(
+            f"❌ Не удалось распознать событие: {str(e)}\n\n"
+            "Попробуйте описать событие иначе или используйте классический режим.",
+            reply_markup=get_add_another_event_keyboard()
+        )
 
 
 # === AI РЕЖИМ: ПОДТВЕРЖДЕНИЕ ===
@@ -293,22 +247,22 @@ async def process_ai_text(message: types.Message, state: FSMContext):
 async def confirm_ai_event(callback: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     telegram_id = callback.from_user.id
-    
+
     if callback.data == "confirm_yes":
         tokens = await get_user_tokens(telegram_id)
-        
+
         if not tokens:
             await callback.message.edit_text("❌ Авторизуйтесь через Google: /start")
             await state.clear()
             return
-        
+
         event_data = data.get('ai_event', {})
-        
+
         # Получаем данные события
         title = event_data.get('title', 'Новое событие')
         event_datetime = event_data.get('datetime')
         location = event_data.get('location')
-        
+
         if not event_datetime:
             await callback.message.edit_text(
                 "❌ Не удалось определить дату/время события.\n"
@@ -316,20 +270,20 @@ async def confirm_ai_event(callback: types.CallbackQuery, state: FSMContext):
             )
             await state.clear()
             return
-        
+
         try:
             # Парсим datetime
             dt_start = datetime.fromisoformat(event_datetime)
             dt_end = dt_start + timedelta(hours=1)  # По умолчанию 1 час
-            
+
             start_time = dt_start.strftime("%Y-%m-%dT%H:%M:%S")
             end_time = dt_end.strftime("%Y-%m-%dT%H:%M:%S")
-            
+
             gcal = SimpleGoogleCalendar(
                 client_id=tokens['client_id'],
                 client_secret=tokens['client_secret']
             )
-            
+
             event = gcal.create_event(
                 access_token=tokens['access_token'],
                 refresh_token=tokens['refresh_token'],
@@ -340,24 +294,38 @@ async def confirm_ai_event(callback: types.CallbackQuery, state: FSMContext):
                 timezone="Europe/Moscow",
                 location=location
             )
-            
+
             await callback.message.edit_text(
                 f"✅ Событие создано!\n\n"
                 f"📝 {event.get('summary', title)}\n"
                 f"📅 {dt_start.strftime('%d.%m.%Y %H:%M')}\n"
                 f"🔗 {event.get('htmlLink', '-')}"
             )
-            
+
         except Exception as e:
             await callback.message.edit_text(f"❌ Ошибка создания события: {str(e)}")
     else:
         await callback.message.edit_text(
             "❌ Событие отменено.\n\n"
-            "Используйте /start чтобы попробовать снова."
+            "Используйте /start чтобы попробовать снова.",
+            reply_markup=get_add_another_event_keyboard()
         )
-    
+
     await state.clear()
     await callback.answer()
+
+@router.callback_query(F.data == "ai_back", EventStates.waiting_for_text)
+async def ai_back_to_mode(callback: types.CallbackQuery, state: FSMContext):
+    await state.clear()
+    await state.set_state(EventStates.choosing_mode)
+
+    await callback.message.edit_text(
+        "Выберите режим события:",
+        reply_markup=get_mode_keyboard()
+    )
+
+    await callback.answer()
+
 
 
 # === ВЫБОР ДАТЫ ===
@@ -468,9 +436,12 @@ async def confirm_event(callback: types.CallbackQuery, state: FSMContext):
                 f"Ссылка: {event.get('html_link', '-')}"
             )
         except Exception as e:
-            await callback.message.edit_text(f"❌ Ошибка: {str(e)}")
+            await callback.message.edit_text(f"❌ Ошибка: {str(e)}",
+                                             reply_markup=get_add_another_event_keyboard())
     else:
-        await callback.message.edit_text("❌ Событие отменено.")
+        await callback.message.edit_text("❌ Событие отменено.",
+                                         reply_markup=get_add_another_event_keyboard())
+
 
     await state.clear()
     await callback.answer()
@@ -503,4 +474,31 @@ async def go_back(callback: types.CallbackQuery, state: FSMContext):
         await state.set_state(EventStates.choosing_mode)
         await callback.message.edit_text("Выберите режим события:", reply_markup=get_mode_keyboard())
 
+
     await callback.answer()
+
+# === Going back to the begining ===
+@router.callback_query(F.data == "add_another_event")
+async def add_another_event(callback: types.CallbackQuery, state: FSMContext):
+    await state.clear()
+    await state.set_state(EventStates.choosing_mode)
+
+    await callback.message.edit_text(
+        "Выберите режим события:",
+        reply_markup=get_mode_keyboard()
+    )
+
+    await callback.answer()
+
+# === Unpredicatble command ===
+@router.message(F.text.startswith("/"))
+async def unknown_command(message: types.Message):
+    known_commands = ["/start", "/auth"]
+    if message.text.split()[0] not in known_commands:
+        await message.answer(
+            "❓ Неизвестная команда.\n\n"
+            "Доступные команды:\n"
+            "/start — начать работу\n"
+            "/auth — подключить Google Calendar"
+        )
+

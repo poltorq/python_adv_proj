@@ -183,3 +183,29 @@ def get_confirmation_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="⬅️", callback_data="back")
         ]
     ])
+
+def get_add_another_event_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="➕ Добавить ещё одно событие",
+                callback_data="add_another_event"
+            )
+        ]
+    ])
+
+def get_ai_back_keyboard() -> InlineKeyboardMarkup:
+    """
+    Кнопка возврата из AI режима
+    к выбору режима события.
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="⬅️ Назад",
+                    callback_data="ai_back"
+                )
+            ]
+        ]
+    )

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import os
 from urllib.parse import urlencode
 from datetime import datetime, timedelta
@@ -28,6 +29,17 @@ SCOPES = [
 ]
 
 
+@dataclass
+class OauthRequest:
+    client_id: str
+    redirect_uri: str
+    response_type: str
+    scope: str
+    access_type: str
+    prompt: str
+    state: str
+
+
 @app.get("/auth/google")
 async def start_auth(user_id: str, chat_id: str):
     print("\n=== START AUTH ===")
@@ -35,17 +47,17 @@ async def start_auth(user_id: str, chat_id: str):
 
     state = f"{user_id}:{chat_id}"
 
-    params = {
-        "client_id": GOOGLE_CLIENT_ID,
-        "redirect_uri": GOOGLE_REDIRECT_URI,
-        "response_type": "code",
-        "scope": " ".join(SCOPES),
-        "access_type": "offline",
-        "prompt": "consent",
-        "state": state,
-    }
+    params = OauthRequest(
+        client_id=GOOGLE_CLIENT_ID,
+        redirect_uri=GOOGLE_REDIRECT_URI,
+        response_type="code",
+        scope=" ".join(SCOPES),
+        access_type="offline",
+        prompt="consent",
+        state=state,
+    )
 
-    url = f"https://accounts.google.com/o/oauth2/auth?{urlencode(params)}"
+    url = f"https://accounts.google.com/o/oauth2/auth?{urlencode(params.__dict__)}"
     print("REDIRECT URL:", url)
     print("==================\n")
 

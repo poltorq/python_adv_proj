@@ -80,6 +80,8 @@ def test_custom_parameters(mock_openai):
     assert client.model == "test-model"
 
 
+
+
 @patch("deepseek_client.OpenAI")
 def test_openai_client_initialization(mock_openai):
     """Test OpenAI client initialization"""

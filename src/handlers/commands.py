@@ -266,7 +266,8 @@ async def confirm_ai_event(callback: types.CallbackQuery, state: FSMContext):
         if not event_datetime:
             await callback.message.edit_text(
                 "❌ Не удалось определить дату/время события.\n"
-                "Попробуйте указать дату и время явно."
+                "Попробуйте указать дату и время явно.",
+                reply_markup=get_add_another_event_keyboard()
             )
             await state.clear()
             return

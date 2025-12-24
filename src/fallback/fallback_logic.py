@@ -5,8 +5,8 @@ import os
 
 from model import extract_event, format_event_for_display, process_text
 import src.clients.deepseek.client as deep_client
-from src.clients.deepseek.client import DeepSeekClient, DeepSeekConfig
-from src.config.config import AppConfig
+from src.clients.deepseek.client import DeepSeekClient
+from src.config.config import AppConfig, DeepSeekConfig
 
 class BaseModel(ABC):
     @abstractmethod
@@ -107,29 +107,11 @@ class FallbackManager:
             "url": "https://zoom.us/..."
         }
     '''
-    def __init__(self):
-        config = AppConfig(
-            bot={
-                "token": os.getenv("TELEGRAM_TOKEN"),
-                "admins": [],
-                "use_webhook": False,
-            },
-            deepseek=DeepSeekConfig(
-                api_key=os.getenv("DEEPSEEK_API_KEY"),
-                #base_url="https://openrouter.ai/api/v1",
-                #model="tngtech/deepseek-r1t-chimera:free",
-                base_url="https://openrouter.ai/api/v1",
-                model="nex-agi/deepseek-v3.1-nex-n1:free"
-            ),
-            debug=True,
-            log_level="INFO",
-        )
-        self.deepspeak_model = DeepSeekClient(config)
 
     def run(self, request: deep_client.ChatRequest, prompt: deep_client.Message) -> dict[str, str]:
         # Get response from the custom model
 
-        
+
         # custom_response = extract_event(prompt.content)
         custom_response = {}
 
@@ -147,6 +129,23 @@ class FallbackManager:
             return custom_response
         else:
             try:
+                config = AppConfig(
+                    bot={
+                        "token": os.getenv("TELEGRAM_TOKEN"),
+                        "admins": [],
+                        "use_webhook": False,
+                    },
+                    deepseek=DeepSeekConfig(
+                        api_key=os.getenv("DEEPSEEK_API_KEY"),
+                        #base_url="https://openrouter.ai/api/v1",
+                        #model="tngtech/deepseek-r1t-chimera:free",
+                        base_url="https://openrouter.ai/api/v1",
+                        model="nex-agi/deepseek-v3.1-nex-n1:free"
+                    ),
+                    debug=True,
+                    log_level="INFO",
+                )
+                self.deepspeak_model = DeepSeekClient(config=config)
                 cont= "Преобразуй запрос пользователь в подобный формат: { \
                     \"title\": \"встреча\", \
                     \"date\": \"2025-04-25\", \
@@ -159,5 +158,5 @@ class FallbackManager:
                 request.messages.append(prompt)
                 self.deepspeak_model.validate_connection()
                 return self.deepspeak_model.chat_completion(request).content
-            except RuntimeError as e:
-                print(f"DeepSeek API error: {e}")
+            except Exception:
+                return custom_response

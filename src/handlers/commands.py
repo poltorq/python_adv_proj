@@ -17,6 +17,9 @@ from src.keyboards.keyboards import (
 )
 from src.service.calendar.client import SimpleGoogleCalendar
 from model import process_text, extract_event, format_event_for_display
+from src.fallback.fallback_logic import FallbackManager, is_valid_date
+import src.clients.deepseek.client as deep_client
+import json
 
 router = Router()
 
@@ -150,6 +153,29 @@ async def choose_mode(callback: types.CallbackQuery, state: FSMContext):
 
 
 # === AI РЕЖИМ: ОБРАБОТКА ТЕКСТА ===
+def validate_event_response(response: dict) -> bool:
+    """Проверяет валидность ответа модели."""
+    if not response:
+        return False
+    title = response.get("title")
+    date_str = response.get("date")
+    return bool(title) and bool(date_str) and is_valid_date(date_str)
+
+
+def parse_deepseek_response(response_text: str) -> dict:
+    """Парсит JSON ответ от DeepSeek."""
+    try:
+        # Пытаемся найти JSON в ответе
+        # DeepSeek может вернуть текст с JSON внутри
+        import re
+        json_match = re.search(r'\{[^{}]*\}', response_text, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+        return json.loads(response_text)
+    except (json.JSONDecodeError, AttributeError):
+        return {}
+
+
 @router.message(EventStates.waiting_for_text)
 async def process_ai_text(message: types.Message, state: FSMContext):
     user_text = message.text
@@ -159,50 +185,107 @@ async def process_ai_text(message: types.Message, state: FSMContext):
     
     await message.answer("🔄 Анализирую текст...")
     
+    event_data = None
+    used_fallback = False
+    
+    # === ШАГ 1: Пробуем нашу модель ===
     try:
-        # Вызываем модель для извлечения события
         event_data = extract_event(user_text)
-        
-        # Сохраняем данные в состоянии
-        await state.update_data(
-            ai_event=event_data,
-            original_text=user_text
-        )
-        
-        # Формируем сообщение с результатом
-        title = event_data.get('title', 'Событие')
-        event_datetime = event_data.get('datetime')
-        location = event_data.get('location')
-        participants = event_data.get('participants', [])
-        
-        result_text = f"🤖 Распознано событие:\n\n"
-        result_text += f"📝 Название: {title}\n"
-        
-        if event_datetime:
-            # Парсим datetime и форматируем красиво
-            try:
-                dt = datetime.fromisoformat(event_datetime)
-                result_text += f"📅 Дата: {dt.strftime('%d.%m.%Y')}\n"
-                result_text += f"🕐 Время: {dt.strftime('%H:%M')}\n"
-            except:
-                result_text += f"📅 Дата/время: {event_datetime}\n"
-        
-        if location:
-            result_text += f"📍 Место: {location}\n"
-        
-        if participants:
-            result_text += f"👥 Участники: {', '.join(participants)}\n"
-        
-        result_text += "\n✅ Создать это событие в календаре?"
-        
-        await message.answer(result_text, reply_markup=get_confirmation_keyboard())
-        await state.set_state(EventStates.ai_confirmation)
-        
+        print(f"[AI] Ответ модели: {event_data}")
     except Exception as e:
+        print(f"[AI] Ошибка модели: {e}")
+        event_data = {}
+    
+    # === ШАГ 2: Проверяем валидность ответа ===
+    if not validate_event_response(event_data):
+        print("[AI] Ответ модели невалиден, используем DeepSeek fallback...")
+        await message.answer("🔄 Уточняю с помощью DeepSeek...")
+        
+        # === ШАГ 3: Fallback на DeepSeek ===
+        try:
+            fallback = FallbackManager()
+            request = deep_client.ChatRequest(messages=[])
+            prompt = deep_client.Message(role="user", content=user_text)
+            
+            deepseek_response = fallback.run(request, prompt)
+            print(f"[AI] Ответ DeepSeek: {deepseek_response}")
+            
+            # Парсим ответ DeepSeek
+            if isinstance(deepseek_response, str):
+                parsed = parse_deepseek_response(deepseek_response)
+            else:
+                parsed = deepseek_response
+            
+            if parsed:
+                # Конвертируем формат DeepSeek в наш формат
+                event_data = {
+                    "title": parsed.get("title", "Событие"),
+                    "date": parsed.get("date"),
+                    "time": parsed.get("time"),
+                    "datetime": None,
+                    "location": parsed.get("loc"),
+                    "participants": [parsed.get("user")] if parsed.get("user") else [],
+                    "url": parsed.get("url"),
+                }
+                # Формируем datetime
+                if event_data["date"] and event_data["time"]:
+                    event_data["datetime"] = f"{event_data['date']}T{event_data['time']}"
+                elif event_data["date"]:
+                    event_data["datetime"] = f"{event_data['date']}T12:00:00"
+                
+                used_fallback = True
+                
+        except Exception as e:
+            print(f"[AI] Ошибка DeepSeek fallback: {e}")
+    
+    # === ШАГ 4: Проверяем итоговый результат ===
+    if not event_data or not event_data.get("datetime"):
         await message.answer(
-            f"❌ Не удалось распознать событие: {str(e)}\n\n"
-            "Попробуйте описать событие иначе или используйте классический режим."
+            "❌ Не удалось распознать событие.\n\n"
+            "Попробуйте описать событие иначе, например:\n"
+            "• «Встреча завтра в 15:00»\n"
+            "• «Созвон 25 декабря в 10:30»\n\n"
+            "Или используйте классический режим."
         )
+        return
+    
+    # Сохраняем данные в состоянии
+    await state.update_data(
+        ai_event=event_data,
+        original_text=user_text,
+        used_fallback=used_fallback
+    )
+    
+    # Формируем сообщение с результатом
+    title = event_data.get('title', 'Событие')
+    event_datetime = event_data.get('datetime')
+    location = event_data.get('location')
+    participants = event_data.get('participants', [])
+    
+    result_text = f"{'🤖' if not used_fallback else '🔮'} Распознано событие"
+    if used_fallback:
+        result_text += " (DeepSeek)"
+    result_text += ":\n\n"
+    result_text += f"📝 Название: {title}\n"
+    
+    if event_datetime:
+        try:
+            dt = datetime.fromisoformat(event_datetime)
+            result_text += f"📅 Дата: {dt.strftime('%d.%m.%Y')}\n"
+            result_text += f"🕐 Время: {dt.strftime('%H:%M')}\n"
+        except:
+            result_text += f"📅 Дата/время: {event_datetime}\n"
+    
+    if location:
+        result_text += f"📍 Место: {location}\n"
+    
+    if participants and any(participants):
+        result_text += f"👥 Участники: {', '.join(filter(None, participants))}\n"
+    
+    result_text += "\n✅ Создать это событие в календаре?"
+    
+    await message.answer(result_text, reply_markup=get_confirmation_keyboard())
+    await state.set_state(EventStates.ai_confirmation)
 
 
 # === AI РЕЖИМ: ПОДТВЕРЖДЕНИЕ ===
